@@ -66,7 +66,7 @@ struct TestAndSetTest : PersistenceTestUtils {
 
     document::Document::SP createTestDocument();
     document::Document::SP retrieveTestDocument();
-    void setTestCondition(api::TestAndSetCommand & command);
+    static void setTestCondition(api::TestAndSetCommand& command);
     void putTestDocument(bool matchingHeader, api::Timestamp timestamp);
     void assertTestDocumentFoundAndMatchesContent(const document::FieldValue & value);
 
@@ -154,6 +154,16 @@ TEST_F(TestAndSetTest, conditional_remove_executed_on_condition_match) {
               dumpBucket(BUCKET_ID));
 }
 
+TEST_F(TestAndSetTest, conditional_remove_to_non_existing_document_fails_with_tas_error) {
+    api::Timestamp timestamp = 0;
+    auto remove = std::make_shared<api::RemoveCommand>(BUCKET, testDocId, timestamp);
+    setTestCondition(*remove);
+
+    ASSERT_EQ(fetchResult(asyncHandler->handleRemove(*remove, createTracker(remove, BUCKET))).getResult(),
+              api::ReturnCode::Result::TEST_AND_SET_CONDITION_FAILED);
+    EXPECT_EQ("", dumpBucket(BUCKET_ID));
+}
+
 std::shared_ptr<api::UpdateCommand>
 TestAndSetTest::conditional_update_test(bool createIfMissing, api::Timestamp updateTimestamp)
 {
@@ -197,8 +207,10 @@ TEST_F(TestAndSetTest, conditional_update_not_executed_when_no_document_and_no_a
     api::Timestamp updateTimestamp = 200;
     auto updateUp = conditional_update_test(false, updateTimestamp);
 
-    ASSERT_EQ(fetchResult(asyncHandler->handleUpdate(*updateUp, createTracker(updateUp, BUCKET))).getResult(),
-              api::ReturnCode::Result::TEST_AND_SET_CONDITION_FAILED);
+    auto reply = fetch_single_reply<api::UpdateReply>(asyncHandler->handleUpdate(*updateUp, createTracker(updateUp, BUCKET)));
+    ASSERT_TRUE(reply);
+    EXPECT_EQ(reply->getResult(), api::ReturnCode());
+    EXPECT_FALSE(reply->wasFound());
     EXPECT_EQ("", dumpBucket(BUCKET_ID));
 }
 
@@ -270,7 +282,7 @@ TestAndSetTest::retrieveTestDocument()
     auto tracker = _persistenceHandler->simpleMessageHandler().handleGet(*get, createTracker(get, BUCKET));
     assert(tracker->getResult() == api::ReturnCode::Result::OK);
 
-    auto & reply = static_cast<api::GetReply &>(tracker->getReply());
+    auto& reply = dynamic_cast<api::GetReply&>(tracker->getReply());
     assert(reply.wasFound());
 
     return reply.getDocument();

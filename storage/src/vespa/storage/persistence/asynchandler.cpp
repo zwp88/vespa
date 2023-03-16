@@ -115,7 +115,7 @@ bucketStatesAreSemanticallyEqual(const api::BucketInfo& a, const api::BucketInfo
 class UnrevertableRemoveEntryProcessor : public BucketProcessor::EntryProcessor {
 public:
     using DocumentIdsAndTimeStamps = std::vector<spi::IdAndTimestamp>;
-    UnrevertableRemoveEntryProcessor(DocumentIdsAndTimeStamps & to_remove)
+    explicit UnrevertableRemoveEntryProcessor(DocumentIdsAndTimeStamps& to_remove) noexcept
         : _to_remove(to_remove)
     {}
 
@@ -159,11 +159,15 @@ AsyncHandler::handlePut(api::PutCommand& cmd, MessageTracker::UP trackerUP) cons
     tracker.setMetric(metrics);
     metrics.request_size.addValue(cmd.getApproxByteSize());
 
-    if (tasConditionExists(cmd) && !tasConditionMatches(cmd, tracker, tracker.context())) {
-        // Will also count condition parse failures etc as TaS failures, but
-        // those results _will_ increase the error metrics as well.
-        metrics.test_and_set_failed.inc();
-        return trackerUP;
+    if (tasConditionExists(cmd)) {
+        auto tas_res = tasConditionMatches(cmd, tracker, tracker.context(), DocNotFoundPolicy::ReturnTaSError);
+        if (tas_res == TasResult::FailedAndSetInTracker) {
+            // Will also count condition parse failures etc. as TaS failures, but
+            // those results _will_ increase the error metrics as well.
+            metrics.test_and_set_failed.inc();
+            return trackerUP;
+        }
+        assert(tas_res == TasResult::Matched); // NotFound treated as failure for Puts
     }
 
     spi::Bucket bucket = _env.getBucket(cmd.getDocumentId(), cmd.getBucket());
@@ -283,9 +287,19 @@ AsyncHandler::handleUpdate(api::UpdateCommand& cmd, MessageTracker::UP trackerUP
     tracker.setMetric(metrics);
     metrics.request_size.addValue(cmd.getApproxByteSize());
 
-    if (tasConditionExists(cmd) && !tasConditionMatches(cmd, tracker, tracker.context(), cmd.getUpdate()->getCreateIfNonExistent())) {
-        metrics.test_and_set_failed.inc();
-        return trackerUP;
+    if (tasConditionExists(cmd)) {
+        const bool create_missing = cmd.getUpdate()->getCreateIfNonExistent();
+        const auto not_found_policy = (create_missing ? DocNotFoundPolicy::TreatAsMatch : DocNotFoundPolicy::ReturnNotFound);
+        auto tas_res = tasConditionMatches(cmd, tracker, tracker.context(), not_found_policy);
+        if (tas_res == TasResult::FailedAndSetInTracker) {
+            metrics.test_and_set_failed.inc();
+            return trackerUP;
+        } else if (tas_res == TasResult::NotFound) {
+            metrics.notFound.inc();
+            tracker.setReply(std::make_shared<api::UpdateReply>(cmd, 0)); // Zero-timestamp == not found
+            return trackerUP;
+        }
+        assert(tas_res == TasResult::Matched);
     }
 
     spi::Bucket bucket = _env.getBucket(cmd.getDocumentId(), cmd.getBucket());
@@ -313,9 +327,13 @@ AsyncHandler::handleRemove(api::RemoveCommand& cmd, MessageTracker::UP trackerUP
     tracker.setMetric(metrics);
     metrics.request_size.addValue(cmd.getApproxByteSize());
 
-    if (tasConditionExists(cmd) && !tasConditionMatches(cmd, tracker, tracker.context())) {
-        metrics.test_and_set_failed.inc();
-        return trackerUP;
+    if (tasConditionExists(cmd)) {
+        auto tas_res = tasConditionMatches(cmd, tracker, tracker.context(), DocNotFoundPolicy::ReturnTaSError);
+        if (tas_res == TasResult::FailedAndSetInTracker) {
+            metrics.test_and_set_failed.inc();
+            return trackerUP;
+        }
+        assert(tas_res == TasResult::Matched); // NotFound treated as failure for Removes
     }
 
     spi::Bucket bucket = _env.getBucket(cmd.getDocumentId(), cmd.getBucket());
@@ -354,24 +372,26 @@ AsyncHandler::tasConditionExists(const api::TestAndSetCommand & cmd) {
     return cmd.getCondition().isPresent();
 }
 
-bool
-AsyncHandler::tasConditionMatches(const api::TestAndSetCommand & cmd, MessageTracker & tracker,
-                                  spi::Context & context, bool missingDocumentImpliesMatch) const {
+AsyncHandler::TasResult
+AsyncHandler::tasConditionMatches(const api::TestAndSetCommand& cmd, MessageTracker& tracker,
+                                  spi::Context& context, DocNotFoundPolicy doc_not_found_policy) const {
     try {
-        TestAndSetHelper helper(_env, _spi, _bucketIdFactory, cmd, missingDocumentImpliesMatch);
+        TestAndSetHelper helper(_env, _spi, _bucketIdFactory, cmd, doc_not_found_policy);
 
-        auto code = helper.retrieveAndMatch(context);
-        if (code.failed()) {
-            tracker.fail(code.getResult(), code.getMessage());
-            return false;
+        auto maybe_code = helper.retrieveAndMatch(context);
+        if (maybe_code && maybe_code->failed()) {
+            tracker.fail(maybe_code->getResult(), maybe_code->getMessage());
+            return TasResult::FailedAndSetInTracker;
+        } else if (!maybe_code) {
+            return TasResult::NotFound;
         }
     } catch (const TestAndSetException & e) {
         auto code = e.getCode();
         tracker.fail(code.getResult(), code.getMessage());
-        return false;
+        return TasResult::FailedAndSetInTracker;
     }
 
-    return true;
+    return TasResult::Matched;
 }
 
 bool

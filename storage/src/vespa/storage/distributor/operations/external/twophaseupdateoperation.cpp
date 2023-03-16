@@ -568,12 +568,8 @@ TwoPhaseUpdateOperation::handleSafePathReceivedGet(DistributorStripeMessageSende
         }
         docToUpdate = reply.getDocument();
         setUpdatedForTimestamp(receivedTimestamp);
-    } else if (hasTasCondition() && !shouldCreateIfNonExistent()) {
-        replyWithTasFailure(sender, "Document did not exist");
-        return;
     } else if (shouldCreateIfNonExistent()) {
-        LOG(debug, "No existing documents found for %s, creating blank document to update",
-            update_doc_id().c_str());
+        LOG(debug, "No existing documents found for %s, creating blank document to update", update_doc_id().c_str());
         docToUpdate = createBlankDocument();
         setUpdatedForTimestamp(putTimestamp);
     } else {

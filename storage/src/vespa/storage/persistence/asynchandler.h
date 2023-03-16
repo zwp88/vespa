@@ -1,6 +1,7 @@
 // Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 #pragma once
 
+#include "doc_not_found_policy.h"
 #include "messages.h"
 #include <vespa/storageapi/message/persistence.h>
 #include <vespa/storageapi/message/removelocation.h>
@@ -38,8 +39,15 @@ public:
 private:
     bool checkProviderBucketInfoMatches(const spi::Bucket&, const api::BucketInfo&) const;
     static bool tasConditionExists(const api::TestAndSetCommand & cmd);
-    bool tasConditionMatches(const api::TestAndSetCommand & cmd, MessageTracker & tracker,
-                             spi::Context & context, bool missingDocumentImpliesMatch = false) const;
+
+    enum class TasResult {
+        Matched,
+        FailedAndSetInTracker,
+        NotFound
+    };
+
+    TasResult tasConditionMatches(const api::TestAndSetCommand& cmd, MessageTracker& tracker,
+                                  spi::Context& context, DocNotFoundPolicy doc_not_found_policy) const;
     const PersistenceUtil            & _env;
     spi::PersistenceProvider         & _spi;
     BucketOwnershipNotifier          & _bucketOwnershipNotifier;

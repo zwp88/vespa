@@ -939,7 +939,7 @@ TEST_F(TwoPhaseUpdateOperationTest, safe_path_condition_unknown_doc_type_fails_w
               _sender.getLastReply(true));
 }
 
-TEST_F(TwoPhaseUpdateOperationTest, safe_path_condition_with_missing_doc_and_no_auto_create_fails_with_tas_error) {
+TEST_F(TwoPhaseUpdateOperationTest, safe_path_condition_with_missing_doc_and_no_auto_create_returns_ok_but_tagged_not_found) {
     setup_stripe(2, 2, "storage:2 distributor:1");
     auto cb = sendUpdate("0=1/2/3,1=2/3/4", UpdateOptions().condition("testdoctype1.headerval==120"));
 
@@ -947,15 +947,12 @@ TEST_F(TwoPhaseUpdateOperationTest, safe_path_condition_with_missing_doc_and_no_
     // Both Gets return nothing at all, nothing at all.
     replyToGet(*cb, _sender, 0, 100, false);
     replyToGet(*cb, _sender, 1, 110, false);
-    EXPECT_EQ("UpdateReply(id:ns:testdoctype1::1, "
-                          "BucketId(0x0000000000000000), "
-                          "timestamp 0, timestamp of updated doc: 0) "
-                          "ReturnCode(TEST_AND_SET_CONDITION_FAILED, "
-                                     "Document did not exist)",
+    EXPECT_EQ("UpdateReply(id:ns:testdoctype1::1, BucketId(0x0000000000000000), "
+              "timestamp 0, timestamp of updated doc: 0) ReturnCode(NONE)",
               _sender.getLastReply(true));
 
-    EXPECT_EQ(metrics().updates.failures.notfound.getValue(), 0); // Not counted as "not found" failure when TaS is present
-    EXPECT_EQ(metrics().updates.failures.test_and_set_failed.getValue(), 1);
+    EXPECT_EQ(metrics().updates.failures.notfound.getValue(), 1);
+    EXPECT_EQ(metrics().updates.failures.test_and_set_failed.getValue(), 0);
 }
 
 TEST_F(TwoPhaseUpdateOperationTest, safe_path_condition_with_missing_doc_and_auto_create_sends_puts) {
