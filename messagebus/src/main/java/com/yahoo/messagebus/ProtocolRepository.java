@@ -33,9 +33,9 @@ public class ProtocolRepository {
     }
 
     /**
-     * Returns whether or not this repository contains a protocol with the given name. Given the concurrent nature of
+     * Returns whether this repository contains a protocol with the given name. Given the concurrent nature of
      * things, one should not invoke this method followed by {@link #getProtocol(String)} and expect the return value to
-     * be non-null. Instead just get the protocol and compare it to null.
+     * be non-null. Instead, just get the protocol and compare it to null.
      *
      * @param name The name to check for.
      * @return True if the named protocol is registered.

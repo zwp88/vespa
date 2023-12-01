@@ -28,6 +28,7 @@ import com.yahoo.yolean.concurrent.Memoized;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -51,6 +52,10 @@ public final class SessionCache extends AbstractComponent {
     private static final Logger log = Logger.getLogger(SessionCache.class.getName());
 
     private final Memoized<SharedMessageBus, RuntimeException> messageBus;
+    private final Object messageBusLock = new Object();
+    private boolean created;
+    private Protocol protocol;
+    private MessagebusConfig messagebusConfig;
 
     private final Object intermediateLock = new Object();
     private final Map<String, SharedIntermediateSession> intermediates = new HashMap<>();
@@ -61,26 +66,16 @@ public final class SessionCache extends AbstractComponent {
     private final SourceSessionCreator sourcesCreator = new SourceSessionCreator();
 
     @Inject
-    public SessionCache(NetworkMultiplexerProvider nets, ContainerMbusConfig containerMbusConfig,
-                        DocumentTypeManager documentTypeManager,
-                        MessagebusConfig messagebusConfig) {
-        this(nets::net, containerMbusConfig, documentTypeManager, messagebusConfig);
-
-    }
-
-    public SessionCache(Supplier<NetworkMultiplexer> net, ContainerMbusConfig containerMbusConfig,
-                        DocumentTypeManager documentTypeManager,
-                        MessagebusConfig messagebusConfig) {
-        this(net,
-             containerMbusConfig,
-             messagebusConfig,
-             new DocumentProtocol(documentTypeManager));
+    public SessionCache(NetworkMultiplexerProvider nets, ContainerMbusConfig containerMbusConfig) {
+        this.messageBus = new Memoized<>(() -> createSharedMessageBus(nets.net(), containerMbusConfig),
+                                         SharedMessageBus::release);
     }
 
     public SessionCache(Supplier<NetworkMultiplexer> net, ContainerMbusConfig containerMbusConfig,
                         MessagebusConfig messagebusConfig, Protocol protocol) {
-        this.messageBus = new Memoized<>(() -> createSharedMessageBus(net.get(), containerMbusConfig, messagebusConfig, protocol),
+        this.messageBus = new Memoized<>(() -> createSharedMessageBus(net.get(), containerMbusConfig),
                                          SharedMessageBus::release);
+        configure(protocol, messagebusConfig);
     }
 
     @Override
@@ -90,20 +85,32 @@ public final class SessionCache extends AbstractComponent {
 
     // Lazily create shared message bus.
     private SharedMessageBus bus() {
+        synchronized (messageBusLock) {
+            if ( ! created) {
+                created = true;
+                configure(protocol, messagebusConfig);
+                protocol = null;
+                messagebusConfig = null;
+            }
+        }
         return messageBus.get();
     }
 
-    private static SharedMessageBus createSharedMessageBus(NetworkMultiplexer net,
-                                                           ContainerMbusConfig mbusConfig,
-                                                           MessagebusConfig messagebusConfig,
-                                                           Protocol protocol) {
-        MessageBusParams mbusParams = new MessageBusParams().addProtocol(protocol);
+    void configure(Protocol protocol, MessagebusConfig messagebusConfig) {
+        synchronized (messageBusLock) {
+            if (created) {
+                if (protocol != null) bus().messageBus().putProtocol(protocol);
+                if (messagebusConfig != null) new ConfigAgent(messagebusConfig, bus().messageBus());
+            }
+            else {
+                this.protocol = protocol;
+                this.messagebusConfig = messagebusConfig;
+            }
+        }
+    }
 
-        mbusParams.setMaxPendingCount(mbusConfig.maxpendingcount());
-
-        MessageBus bus = new MessageBus(net, mbusParams);
-        new ConfigAgent(messagebusConfig, bus); // Configure the wrapped MessageBus with a routing table.
-        return new SharedMessageBus(bus);
+    private static SharedMessageBus createSharedMessageBus(NetworkMultiplexer net, ContainerMbusConfig mbusConfig) {
+        return new SharedMessageBus(new MessageBus(net, new MessageBusParams().setMaxPendingCount(mbusConfig.maxpendingcount())));
     }
 
     ReferencedResource<SharedIntermediateSession> retainIntermediate(final IntermediateSessionParams p) {

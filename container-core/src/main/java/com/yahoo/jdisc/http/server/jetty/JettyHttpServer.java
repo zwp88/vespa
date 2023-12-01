@@ -178,7 +178,7 @@ public class JettyHttpServer extends AbstractResource implements ServerProvider 
             logEffectiveSslConfiguration();
         } catch (final Exception e) {
             if (e instanceof IOException && e.getCause() instanceof BindException) {
-                throw new RuntimeException("Failed to start server due to BindException. ListenPorts = " + listenedPorts.toString(), e.getCause());
+                throw new RuntimeException("Failed to start server due to BindException. ListenPorts = " + listenedPorts, e.getCause());
             }
             throw new RuntimeException("Failed to start server.", e);
         }
