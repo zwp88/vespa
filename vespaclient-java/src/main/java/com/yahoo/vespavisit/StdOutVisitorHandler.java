@@ -270,11 +270,15 @@ public class StdOutVisitorHandler extends VdsVisitHandler {
 
         @Override
         public synchronized void onDone() {
-            if ((params.outputFormat == OutputFormat.JSON) && !params.printIds && !params.nullRender) {
-                if (first) {
-                    out.print('[');
+            if (!params.printIds && !params.nullRender) {
+                if (params.outputFormat == OutputFormat.JSON) {
+                    if (first) {
+                        out.print('[');
+                    }
+                    out.println("]");
+                } else if (params.outputFormat == OutputFormat.JSONL) {
+                    out.println(); // Ensure last line is terminated by line break
                 }
-                out.println("]");
             }
             statisticsMap.dumpAll();
             super.onDone();

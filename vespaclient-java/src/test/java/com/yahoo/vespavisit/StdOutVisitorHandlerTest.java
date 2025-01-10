@@ -137,13 +137,14 @@ public class StdOutVisitorHandlerTest {
         dataHandler.onMessage(createPutWithDocAndValue(docType, "id:baz:foo::3", "\r\ncool fox\r\n"), mock(AckToken.class));
         dataHandler.onDone();
 
-        String output = out.toString().trim();
+        String output = out.toString();
         if (jsonLinesFormat) {
             // JSONL; no implicit start/end array chars or trailing commas after objects
             var expected = """
                     {"id":"id:baz:foo::1","fields":{"bar":"fluffy\\nbunnies"}}
                     {"remove":"id:baz:foo::2"}
-                    {"id":"id:baz:foo::3","fields":{"bar":"\\r\\ncool fox\\r\\n"}}""";
+                    {"id":"id:baz:foo::3","fields":{"bar":"\\r\\ncool fox\\r\\n"}}
+                    """;
             assertEquals(expected, output);
         } else {
             // non-JSONL; usual array of comma-separated objects form
@@ -151,7 +152,8 @@ public class StdOutVisitorHandlerTest {
                     [
                     {"id":"id:baz:foo::1","fields":{"bar":"fluffy\\nbunnies"}},
                     {"remove":"id:baz:foo::2"},
-                    {"id":"id:baz:foo::3","fields":{"bar":"\\r\\ncool fox\\r\\n"}}]""";
+                    {"id":"id:baz:foo::3","fields":{"bar":"\\r\\ncool fox\\r\\n"}}]
+                    """;
             assertEquals(expected, output);
         }
     }
