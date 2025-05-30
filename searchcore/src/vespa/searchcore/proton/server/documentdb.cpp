@@ -226,7 +226,8 @@ DocumentDB::DocumentDB(const std::string &baseDir,
       _maintenanceController(shared_service.transport(), _writeService.master(), _refCount, _docTypeName),
       _jobTrackers(),
       _calc(),
-      _metricsUpdater(_subDBs, _writeService, _jobTrackers, _writeFilter, *_feedHandler)
+      _metricsUpdater(_subDBs, _writeService, _jobTrackers, _writeFilter, *_feedHandler),
+      _initializationProgressReporter(_docTypeName.getName(), *this)
 {
     assert(configSnapshot);
 
@@ -323,6 +324,7 @@ DocumentDB::initManagers()
     DocumentDBConfig::SP configSnapshot(_initConfigSnapshot);
     _initConfigSnapshot.reset();
     InitializerTask::SP rootTask = _subDBs.createInitializer(*configSnapshot, _initConfigSerialNum, _indexCfg);
+    rootTask->registerInProgressReporter(_initializationProgressReporter);
     InitializeThreads initializeThreads = _initializeThreads;
     _initializeThreads.reset();
     std::shared_ptr<TaskRunner> taskRunner(std::make_shared<TaskRunner>(*initializeThreads));
@@ -728,6 +730,7 @@ DocumentDB::waitForInitDone()
 void
 DocumentDB::startTransactionLogReplay()
 {
+    _initializationStatus.startReplay();
     // This configSnapshot is only used to reuse DocumentTypeRepo
     // and TuneFile when loading configs during replay.
     DocumentDBConfig::SP configSnapshot = getActiveConfig();
@@ -1094,6 +1097,7 @@ void
 DocumentDB::waitForOnlineState()
 {
     _state.waitForOnlineState();
+    _initializationStatus.finishInitialization();
 }
 
 std::string
