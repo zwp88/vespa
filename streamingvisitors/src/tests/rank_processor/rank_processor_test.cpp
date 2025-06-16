@@ -131,7 +131,8 @@ TEST_F(RankProcessorTest, unpack_match_data_for_nearest_neighbor_query_node)
     constexpr uint32_t target_num_hits = 100;
     constexpr bool allow_approximate = false;
     constexpr uint32_t explore_additional_hits = 800;
-    builder.add_nearest_neighbor_term("qtensor", "field", id, Weight(weight), target_num_hits, allow_approximate, explore_additional_hits, distance_threshold);
+    constexpr double adaptive_beam_search_slack = 0.0f;
+    builder.add_nearest_neighbor_term("qtensor", "field", id, Weight(weight), target_num_hits, allow_approximate, explore_additional_hits, adaptive_beam_search_slack, distance_threshold);
     build_query(builder);
     auto& term_list = _query_wrapper->getTermList();
     EXPECT_EQ(1u, term_list.size());

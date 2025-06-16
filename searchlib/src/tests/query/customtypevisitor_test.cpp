@@ -1,4 +1,5 @@
 // Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+
 // Unit tests for customtypevisitor.
 
 #include <vespa/searchlib/query/tree/customtypevisitor.h>
@@ -45,7 +46,7 @@ struct MyWandTerm : WandTerm { MyWandTerm() : WandTerm(0, "view", 0, Weight(42),
 struct MyPredicateQuery : InitTerm<PredicateQuery> {};
 struct MyRegExpTerm : InitTerm<RegExpTerm>  {};
 struct MyNearestNeighborTerm : NearestNeighborTerm {
-    MyNearestNeighborTerm() : NearestNeighborTerm("qt", "fn", 0, Weight(42), 10, true, 666, 1234.5) {}
+    MyNearestNeighborTerm() : NearestNeighborTerm("qt", "fn", 0, Weight(42), 10, true, 666, 0.0, 1234.5) {}
 };
 struct MyTrue : TrueQueryNode {};
 struct MyFalse : FalseQueryNode {};

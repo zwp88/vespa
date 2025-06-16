@@ -732,8 +732,9 @@ TEST(StreamingQueryTest, test_nearest_neighbor_query_node)
     constexpr uint32_t target_num_hits = 100;
     constexpr bool allow_approximate = false;
     constexpr uint32_t explore_additional_hits = 800;
+    constexpr double adaptive_beam_search_slack = 0.0;
     constexpr double distance = 0.5;
-    builder.add_nearest_neighbor_term("qtensor", "field", id, Weight(weight), target_num_hits, allow_approximate, explore_additional_hits, distance_threshold);
+    builder.add_nearest_neighbor_term("qtensor", "field", id, Weight(weight), target_num_hits, allow_approximate, explore_additional_hits, adaptive_beam_search_slack, distance_threshold);
     auto build_node = builder.build();
     auto stack_dump = StackDumpCreator::create(*build_node);
     QueryNodeResultFactory empty;

@@ -112,7 +112,7 @@ Node::UP createQueryTree() {
             builder.addStringTerm(str[5], view[5], id[5], weight[6]);
             builder.addStringTerm(str[6], view[6], id[6], weight[7]);
         }
-        builder.add_nearest_neighbor_term("query_tensor", "doc_tensor", id[3], weight[5], 7, true, 33, 100100.25);
+        builder.add_nearest_neighbor_term("query_tensor", "doc_tensor", id[3], weight[5], 7, true, 33, 0.0, 100100.25);
         builder.addAndNot(2);
         {
             builder.add_true_node();
@@ -455,9 +455,9 @@ struct MyRegExpTerm : RegExpTerm {
 struct MyNearestNeighborTerm : NearestNeighborTerm {
     MyNearestNeighborTerm(std::string_view query_tensor_name, const string & field_name,
                           int32_t i, Weight w, uint32_t target_num_hits,
-                          bool allow_approximate, uint32_t explore_additional_hits,
+                          bool allow_approximate, uint32_t explore_additional_hits, double adaptive_beam_search_slack,
                           double distance_threshold)
-      : NearestNeighborTerm(query_tensor_name, field_name, i, w, target_num_hits, allow_approximate, explore_additional_hits, distance_threshold)
+      : NearestNeighborTerm(query_tensor_name, field_name, i, w, target_num_hits, allow_approximate, explore_additional_hits, adaptive_beam_search_slack, distance_threshold)
     {}
 };
 struct MyTrue : TrueQueryNode {};
