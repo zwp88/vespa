@@ -21,6 +21,7 @@ public class NearestNeighborItem extends SimpleTaggableItem {
 
     private int targetNumHits = 0;
     private int hnswExploreAdditionalHits = 0;
+    private double hnswAdaptiveBeamSearchSlack = 0.0f;
     private double distanceThreshold = Double.POSITIVE_INFINITY;
     private boolean approximate = true;
     private String field;
@@ -43,6 +44,9 @@ public class NearestNeighborItem extends SimpleTaggableItem {
     /** Returns the number of extra hits to explore in HNSW algorithm */
     public int getHnswExploreAdditionalHits() { return hnswExploreAdditionalHits; }
 
+    /** Returns the slack parameter for adaptive beam search in HNSW algorithm */
+    public double getHnswAdaptiveBeamSearchSlack() { return hnswAdaptiveBeamSearchSlack; }
+
     /** Returns whether approximation is allowed */
     public boolean getAllowApproximate() { return approximate; }
 
@@ -57,6 +61,9 @@ public class NearestNeighborItem extends SimpleTaggableItem {
 
     /** Set the number of extra hits to explore in HNSW algorithm */
     public void setHnswExploreAdditionalHits(int num) { this.hnswExploreAdditionalHits = num; }
+
+    /** Set the slack parameter for adaptive beam search in HNSW algorithm */
+    public void setHnswAdaptiveBeamSearchSlack(double num) { this.hnswAdaptiveBeamSearchSlack = num; }
 
     /** Set whether approximation is allowed */
     public void setAllowApproximate(boolean value) { this.approximate = value; }
@@ -82,6 +89,7 @@ public class NearestNeighborItem extends SimpleTaggableItem {
         IntegerCompressor.putCompressedPositiveNumber(targetNumHits, buffer);
         IntegerCompressor.putCompressedPositiveNumber(approxNum, buffer);
         IntegerCompressor.putCompressedPositiveNumber(hnswExploreAdditionalHits, buffer);
+        buffer.putDouble(hnswAdaptiveBeamSearchSlack);
         buffer.putDouble(distanceThreshold);
         return 1;  // number of encoded stack dump items
     }
@@ -91,6 +99,7 @@ public class NearestNeighborItem extends SimpleTaggableItem {
         buffer.append("{field=").append(field);
         buffer.append(",queryTensorName=").append(queryTensorName);
         buffer.append(",hnsw.exploreAdditionalHits=").append(hnswExploreAdditionalHits);
+        buffer.append(",hnsw.adaptiveBeamSearchSlack=").append(hnswAdaptiveBeamSearchSlack);
         buffer.append(",distanceThreshold=").append(distanceThreshold);
         buffer.append(",approximate=").append(approximate);
         buffer.append(",targetHits=").append(targetNumHits).append("}");
@@ -102,6 +111,7 @@ public class NearestNeighborItem extends SimpleTaggableItem {
         discloser.addProperty("field", field);
         discloser.addProperty("queryTensorName", queryTensorName);
         discloser.addProperty("hnsw.exploreAdditionalHits", hnswExploreAdditionalHits);
+        discloser.addProperty("hnsw.adaptiveBeamSearchSlack", hnswAdaptiveBeamSearchSlack);
         discloser.addProperty("distanceThreshold", distanceThreshold);
         discloser.addProperty("approximate", approximate);
         discloser.addProperty("targetHits", targetNumHits);
@@ -113,6 +123,7 @@ public class NearestNeighborItem extends SimpleTaggableItem {
         NearestNeighborItem other = (NearestNeighborItem)o;
         if (this.targetNumHits != other.targetNumHits) return false;
         if (this.hnswExploreAdditionalHits != other.hnswExploreAdditionalHits) return false;
+        if (this.hnswAdaptiveBeamSearchSlack != other.hnswAdaptiveBeamSearchSlack) return false;
         if (this.distanceThreshold != other.distanceThreshold) return false;
         if (this.approximate != other.approximate) return false;
         if ( ! this.field.equals(other.field)) return false;
@@ -122,8 +133,8 @@ public class NearestNeighborItem extends SimpleTaggableItem {
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), targetNumHits, hnswExploreAdditionalHits,
-                            distanceThreshold, approximate, field, queryTensorName);
+        return Objects.hash(super.hashCode(), targetNumHits, hnswExploreAdditionalHits, hnswAdaptiveBeamSearchSlack,
+                distanceThreshold, approximate, field, queryTensorName);
     }
 
 }

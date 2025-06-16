@@ -829,6 +829,12 @@ public class VespaSerializer {
                 String key = YqlParser.HNSW_EXPLORE_ADDITIONAL_HITS;
                 annotationKey(destination, key).append(explore);
             }
+            double slack = item.getHnswAdaptiveBeamSearchSlack();
+            if (slack != 0.0f) {
+                comma(destination, initLen);
+                String key = YqlParser.HNSW_ADAPTIVE_BEAM_SEARCH_SLACK;
+                annotationKey(destination, key).append(slack);
+            }
             boolean allow_approx = item.getAllowApproximate();
             if (! allow_approx) {
                 comma(destination, initLen);

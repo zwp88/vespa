@@ -93,6 +93,7 @@ import static com.yahoo.search.yql.YqlParser.FILTER;
 import static com.yahoo.search.yql.YqlParser.FUZZY;
 import static com.yahoo.search.yql.YqlParser.GEO_LOCATION;
 import static com.yahoo.search.yql.YqlParser.HIT_LIMIT;
+import static com.yahoo.search.yql.YqlParser.HNSW_ADAPTIVE_BEAM_SEARCH_SLACK;
 import static com.yahoo.search.yql.YqlParser.HNSW_EXPLORE_ADDITIONAL_HITS;
 import static com.yahoo.search.yql.YqlParser.IMPLICIT_TRANSFORMS;
 import static com.yahoo.search.yql.YqlParser.LABEL;
@@ -469,6 +470,10 @@ public class SelectParser implements Parser {
                 if (HNSW_EXPLORE_ADDITIONAL_HITS.equals(annotation_name)) {
                     int hnswExploreAdditionalHits = (int)(annotation_value.asDouble());
                     item.setHnswExploreAdditionalHits(hnswExploreAdditionalHits);                    
+                }
+                if (HNSW_ADAPTIVE_BEAM_SEARCH_SLACK.equals(annotation_name)) {
+                    double hnswAdaptiveBeamSearchSlack = (annotation_value.asDouble());
+                    item.setHnswAdaptiveBeamSearchSlack(hnswAdaptiveBeamSearchSlack);
                 }
                 if (APPROXIMATE.equals(annotation_name)) {
                     boolean allowApproximate = annotation_value.asBool();

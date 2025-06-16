@@ -167,6 +167,7 @@ public class YqlParser implements Parser {
     public static final String FREQUENCY = "frequency";
     public static final String GEO_LOCATION = "geoLocation";
     public static final String HIT_LIMIT = "hitLimit";
+    public static final String HNSW_ADAPTIVE_BEAM_SEARCH_SLACK = "hnsw.adaptiveBeamSearchSlack";
     public static final String HNSW_EXPLORE_ADDITIONAL_HITS = "hnsw.exploreAdditionalHits";
     public static final String IMPLICIT_TRANSFORMS = "implicitTransforms";
     public static final String LABEL = "label";
@@ -509,6 +510,11 @@ public class YqlParser implements Parser {
                 Integer.class, null, "number of extra hits to explore for HNSW algorithm");
         if (hnswExploreAdditionalHits != null) {
             item.setHnswExploreAdditionalHits(hnswExploreAdditionalHits);
+        }
+        Double hnswAdaptiveBeamSearchSlack = getAnnotation(ast, HNSW_ADAPTIVE_BEAM_SEARCH_SLACK,
+                Double.class, null, "slack parameter for adaptive beam search in HNSW algorithm");
+        if (hnswAdaptiveBeamSearchSlack != null) {
+            item.setHnswAdaptiveBeamSearchSlack(hnswAdaptiveBeamSearchSlack);
         }
         Boolean allowApproximate = getAnnotation(ast, APPROXIMATE,
                 Boolean.class, Boolean.TRUE, "allow approximate nearest neighbor search");
