@@ -186,7 +186,7 @@ private:
     void visit(NearestNeighborTerm &node) override {
         replicate(node, _builder.add_nearest_neighbor_term(node.get_query_tensor_name(), node.getView(),
                                                            node.getId(), node.getWeight(), node.get_target_num_hits(),
-                                                           node.get_allow_approximate(), node.get_explore_additional_hits(),
+                                                           node.get_allow_approximate(), node.get_explore_additional_hits(), node.get_adaptive_beam_search_slack(),
                                                            node.get_distance_threshold()));
     }
 

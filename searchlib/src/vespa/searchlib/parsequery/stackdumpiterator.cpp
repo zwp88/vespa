@@ -261,7 +261,8 @@ SimpleQueryStackDumpIterator::readNN(const char *& p) {
     // XXX: remove later when QRS doesn't send this extra flag
     _extraIntArg2 &= ~0x40;
     // QRS always sends this now:
-    _extraDoubleArg4 = read_value<double>(p); // distance threshold
+    _extraDoubleArg4 = read_value<double>(p); // adaptive_beam_search_slack
+    _extraDoubleArg5 = read_value<double>(p); // distance threshold
     _currArity = 0;
 }
 

@@ -772,6 +772,7 @@ public:
                                                                             n.get_target_num_hits(),
                                                                             n.get_allow_approximate(),
                                                                             n.get_explore_additional_hits(),
+                                                                            n.get_adaptive_beam_search_slack(),
                                                                             n.get_distance_threshold(),
                                                                             params.global_filter_lower_limit,
                                                                             params.global_filter_upper_limit,

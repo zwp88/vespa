@@ -151,18 +151,20 @@ private:
     uint32_t _target_num_hits;
     bool _allow_approximate;
     uint32_t _explore_additional_hits;
+    double _adaptive_beam_search_slack;
     double _distance_threshold;
 
 public:
     NearestNeighborTerm(std::string_view query_tensor_name, std::string field_name,
                         int32_t id, Weight weight, uint32_t target_num_hits,
-                        bool allow_approximate, uint32_t explore_additional_hits,
+                        bool allow_approximate, uint32_t explore_additional_hits, double adaptive_beam_search_slack,
                         double distance_threshold)
         : QueryNodeMixinType(std::move(field_name), id, weight),
           _query_tensor_name(query_tensor_name),
           _target_num_hits(target_num_hits),
           _allow_approximate(allow_approximate),
           _explore_additional_hits(explore_additional_hits),
+          _adaptive_beam_search_slack(adaptive_beam_search_slack),
           _distance_threshold(distance_threshold)
     {}
     ~NearestNeighborTerm() override;
@@ -170,6 +172,7 @@ public:
     uint32_t get_target_num_hits() const { return _target_num_hits; }
     bool get_allow_approximate() const { return _allow_approximate; }
     uint32_t get_explore_additional_hits() const { return _explore_additional_hits; }
+    double get_adaptive_beam_search_slack() const { return _adaptive_beam_search_slack; }
     double get_distance_threshold() const { return _distance_threshold; }
 };
 

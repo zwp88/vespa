@@ -302,6 +302,7 @@ class QueryNodeConverter : public QueryVisitor {
         appendCompressedPositiveNumber(node.get_target_num_hits());
         appendCompressedPositiveNumber(node.get_allow_approximate() ? 0x1 : 0x0);
         appendCompressedPositiveNumber(node.get_explore_additional_hits());
+        appendDouble(node.get_adaptive_beam_search_slack());
         appendDouble(node.get_distance_threshold());
     }
 

@@ -131,11 +131,12 @@ public:
 
     uint32_t getNearDistance() const noexcept { return _extraIntArg1; }
     uint32_t getTargetHits() const noexcept { return _extraIntArg1; }
-    double getDistanceThreshold() const noexcept { return _extraDoubleArg4; }
+    double getDistanceThreshold() const noexcept { return _extraDoubleArg5; }
     double getScoreThreshold() const noexcept { return _extraDoubleArg4; }
     double getThresholdBoostFactor() const noexcept { return _extraDoubleArg5; }
     bool getAllowApproximate() const noexcept { return (_extraIntArg2 != 0); }
     uint32_t getExploreAdditionalHits() const noexcept { return _extraIntArg3; }
+    double getAdaptiveBeamSearchSlack() const noexcept { return _extraDoubleArg4; }
 
     // fuzzy match arguments (see also: has_prefix_match_semantics() for fuzzy prefix matching)
     [[nodiscard]] uint32_t fuzzy_max_edit_distance() const noexcept { return _extraIntArg1; }

@@ -35,6 +35,7 @@ private:
     uint32_t _adjusted_target_hits;
     bool _approximate;
     uint32_t _explore_additional_hits;
+    double _adaptive_beam_search_slack;
     double _distance_threshold;
     double _global_filter_lower_limit;
     double _global_filter_upper_limit;
@@ -53,7 +54,9 @@ private:
 public:
     NearestNeighborBlueprint(const queryeval::FieldSpec& field,
                              std::unique_ptr<search::tensor::DistanceCalculator> distance_calc,
-                             uint32_t target_hits, bool approximate, uint32_t explore_additional_hits,
+                             uint32_t target_hits, bool approximate,
+                             uint32_t explore_additional_hits,
+                             double adaptive_beam_search_slack,
                              double distance_threshold,
                              double global_filter_lower_limit,
                              double global_filter_upper_limit,

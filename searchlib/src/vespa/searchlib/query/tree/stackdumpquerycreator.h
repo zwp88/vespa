@@ -132,9 +132,10 @@ private:
             Weight weight = queryStack.GetWeight();
             bool allow_approximate = queryStack.getAllowApproximate();
             uint32_t explore_additional_hits = queryStack.getExploreAdditionalHits();
+            double adaptive_beam_search_slack = queryStack.getAdaptiveBeamSearchSlack();
             double distance_threshold = queryStack.getDistanceThreshold();
             builder.add_nearest_neighbor_term(query_tensor_name, queryStack.index_as_string(), id, weight,
-                                              target_num_hits, allow_approximate, explore_additional_hits,
+                                              target_num_hits, allow_approximate, explore_additional_hits, adaptive_beam_search_slack,
                                               distance_threshold);
         } else if (type == ParseItem::ITEM_TRUE) {
             builder.add_true_node();
