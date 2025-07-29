@@ -16,7 +16,8 @@ public class OrPredicateNode extends MultiArgPredicateNode {
 
     public static final int classId = registerClass(0x4000 + 176, OrPredicateNode.class, OrPredicateNode::new);
 
-    public OrPredicateNode() {}
+    public OrPredicateNode() {
+    }
 
     public OrPredicateNode(List<FilterExpressionNode> args) {
         super(args);
@@ -26,7 +27,7 @@ public class OrPredicateNode extends MultiArgPredicateNode {
     public FilterExpressionNode clone() {
         return new OrPredicateNode(getArgs().stream().map(FilterExpressionNode::clone).toList());
     }
-    
+
     @Override
     protected int onGetClassId() {
         return classId;
