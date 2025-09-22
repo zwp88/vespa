@@ -30,6 +30,7 @@ public:
                const std::string &term,
                const FakeResult &res,
                fef::TermFieldMatchDataArray tfmda);
+    ~FakeSearch() override;
     void attr_ctx(const attribute::ISearchContext *ctx) { _ctx = ctx; }
     bool is_attr() const { return (_ctx != nullptr); }
     void doSeek(uint32_t docid) override;
@@ -40,6 +41,8 @@ public:
     }
     const PostingInfo *getPostingInfo() const override { return _result.postingInfo(); }
     void visitMembers(vespalib::ObjectVisitor &visitor) const override;
+    void get_element_ids(uint32_t docid, std::vector<uint32_t>& element_ids) override;
+    void and_element_ids_into(uint32_t docid, std::vector<uint32_t>& element_ids) override;
 };
 
 }

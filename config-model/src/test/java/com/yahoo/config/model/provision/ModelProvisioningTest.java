@@ -39,6 +39,7 @@ import com.yahoo.vespa.model.content.cluster.ContentCluster;
 import com.yahoo.vespa.model.content.storagecluster.StorageCluster;
 import com.yahoo.vespa.model.search.SearchNode;
 import com.yahoo.vespa.model.test.VespaModelTester;
+import com.yahoo.vespa.model.test.utils.DeployLoggerStub;
 import com.yahoo.vespa.model.test.utils.VespaModelCreatorWithMockPkg;
 import com.yahoo.yolean.Exceptions;
 import org.junit.jupiter.api.Test;
@@ -173,7 +174,7 @@ public class ModelProvisioningTest {
                 "<?xml version='1.0' encoding='utf-8' ?>" +
                 "<services>" +
                 "\n" +
-                "  <admin version='3.0'>" +
+                "  <admin version='4.0'>" +
                 "    <nodes count='3'/>" +
                 "  </admin>" +
                 "  <content version='1.0' id='bar'>" +
@@ -262,242 +263,6 @@ public class ModelProvisioningTest {
         assertTrue(host.spec().membership().isPresent());
         assertEquals("container", host.spec().membership().get().cluster().type().name());
         assertEquals("container1", host.spec().membership().get().cluster().id().value());
-    }
-
-    @Test
-    public void testCombinedCluster() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                        "<services>" +
-                        "  <container version='1.0' id='container1'>" +
-                        "     <search/>" +
-                        "     <nodes of='content1'/>" +
-                        "  </container>" +
-                        "  <content version='1.0' id='content1'>" +
-                        "     <redundancy>2</redundancy>" +
-                        "     <documents>" +
-                        "       <document type='type1' mode='index'/>" +
-                        "     </documents>" +
-                        "     <nodes count='2'>" +
-                        "       <resources vcpu='1' memory='3Gb' disk='9Gb'/>" +
-                        "     </nodes>" +
-                        "   </content>" +
-                        "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(5);
-        TestLogger logger = new TestLogger();
-        VespaModel model = tester.createModel(xmlWithNodes, true, deployStateWithClusterEndpoints("container1").deployLogger(logger));
-        assertEquals(2, model.getContentClusters().get("content1").getRootGroup().getNodes().size(), "Nodes in content1");
-        assertEquals(2, model.getContainerClusters().get("container1").getContainers().size(), "Nodes in container1");
-        assertEquals(24, physicalMemoryPercentage(model.getContainerClusters().get("container1")), "Heap size is lowered with combined clusters");
-        assertEquals(1876900708, protonMemorySize(model.getContentClusters().get("content1")), "Memory for proton is lowered to account for the jvm heap");
-        assertProvisioned(0, ClusterSpec.Id.from("container1"), ClusterSpec.Type.container, model);
-        assertProvisioned(2, ClusterSpec.Id.from("content1"), ClusterSpec.Id.from("container1"), ClusterSpec.Type.combined, model);
-        var msgs = logger.msgs().stream().filter(m -> m.level().equals(Level.WARNING)).toList();
-        assertEquals(1, msgs.size(), msgs.toString());
-        assertEquals("Declaring combined cluster with <nodes of=\"...\"> is deprecated without replacement, " +
-                     "and the feature will be removed in Vespa 9. Use separate container and content clusters instead",
-                     msgs.get(0).message);
-    }
-
-    @Test
-    public void testCombinedClusterWithJvmHeapSizeOverride() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                        "<services>" +
-                        "  <container version='1.0' id='container1'>" +
-                        "     <search/>" +
-                        "     <nodes of='content1'>" +
-                        "      <jvm allocated-memory=\"30%\"/>" +
-                        "     </nodes>" +
-                        "  </container>" +
-                        "  <content version='1.0' id='content1'>" +
-                        "     <redundancy>2</redundancy>" +
-                        "     <documents>" +
-                        "       <document type='type1' mode='index'/>" +
-                        "     </documents>" +
-                        "     <nodes count='2'>" +
-                        "       <resources vcpu='1' memory='3Gb' disk='9Gb'/>" +
-                        "     </nodes>" +
-                        "   </content>" +
-                        "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(5);
-        VespaModel model = tester.createModel(xmlWithNodes, true, deployStateWithClusterEndpoints("container1"));
-        assertEquals(2, model.getContentClusters().get("content1").getRootGroup().getNodes().size(), "Nodes in content1");
-        assertEquals(2, model.getContainerClusters().get("container1").getContainers().size(), "Nodes in container1");
-        assertEquals(30, physicalMemoryPercentage(model.getContainerClusters().get("container1")), "Heap size is lowered with combined clusters");
-        assertEquals((long) ((3 - memoryOverheadGb) * (Math.pow(1024, 3)) * (1 - 0.30)), protonMemorySize(model.getContentClusters()
-                                                                                                                   .get("content1")), "Memory for proton is lowered to account for the jvm heap");
-        assertProvisioned(0, ClusterSpec.Id.from("container1"), ClusterSpec.Type.container, model);
-        assertProvisioned(2, ClusterSpec.Id.from("content1"), ClusterSpec.Id.from("container1"), ClusterSpec.Type.combined, model);
-    }
-
-    /** For comparison with the above */
-    @Test
-    public void testNonCombinedCluster() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                        "<services>" +
-                        "  <container version='1.0' id='container1'>" +
-                        "     <search/>" +
-                        "     <nodes count='2'/>" +
-                        "  </container>" +
-                        "  <content version='1.0' id='content1'>" +
-                        "     <redundancy>2</redundancy>" +
-                        "     <documents>" +
-                        "       <document type='type1' mode='index'/>" +
-                        "     </documents>" +
-                        "     <nodes count='2'>" +
-                        "       <resources vcpu='1' memory='3Gb' disk='9Gb'/>" +
-                        "     </nodes>" +
-                        "   </content>" +
-                        "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(7);
-        VespaModel model = tester.createModel(xmlWithNodes, true, deployStateWithClusterEndpoints("container1"));
-        assertEquals(2, model.getContentClusters().get("content1").getRootGroup().getNodes().size(), "Nodes in content1");
-        assertEquals(2, model.getContainerClusters().get("container1").getContainers().size(), "Nodes in container1");
-        assertEquals(85, physicalMemoryPercentage(model.getContainerClusters().get("container1")), "Heap size is normal");
-        assertEquals((long) ((3 - memoryOverheadGb) * (Math.pow(1024, 3))), protonMemorySize(model.getContentClusters().get("content1")), "Memory for proton is normal");
-    }
-
-    @Test
-    public void testCombinedClusterWithJvmOptions() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                "<services>" +
-                "  <container version='1.0' id='container1'>" +
-                "     <document-processing/>" +
-                "     <nodes of='content1'>" +
-                "       <jvm options='-Dtestoption=foo' />" +
-                "     </nodes>" +
-                "  </container>" +
-                "  <content version='1.0' id='content1'>" +
-                "     <redundancy>2</redundancy>" +
-                "     <documents>" +
-                "       <document type='type1' mode='index'/>" +
-                "     </documents>" +
-                "     <nodes count='2'/>" +
-                "   </content>" +
-                "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(5);
-        VespaModel model = tester.createModel(xmlWithNodes, true, deployStateWithClusterEndpoints("container1"));
-
-        assertEquals(2, model.getContentClusters().get("content1").getRootGroup().getNodes().size(), "Nodes in content1");
-        assertEquals(2, model.getContainerClusters().get("container1").getContainers().size(), "Nodes in container1");
-        for (Container container : model.getContainerClusters().get("container1").getContainers())
-            assertTrue(container.getJvmOptions().contains("testoption"));
-    }
-
-    @Test
-    public void testMultipleCombinedClusters() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                "<services>" +
-                "  <container version='1.0' id='container1'>" +
-                "     <nodes of='content1'/>" +
-                "  </container>" +
-                "  <container version='1.0' id='container2'>" +
-                "     <nodes of='content2'/>" +
-                "  </container>" +
-                "  <content version='1.0' id='content1'>" +
-                "     <redundancy>2</redundancy>" +
-                "     <documents>" +
-                "       <document type='type1' mode='index'/>" +
-                "     </documents>" +
-                "     <nodes count='2'/>" +
-                "   </content>" +
-                "  <content version='1.0' id='content2'>" +
-                "     <redundancy>2</redundancy>" +
-                "     <documents>" +
-                "       <document type='type1' mode='index'/>" +
-                "     </documents>" +
-                "     <nodes count='3'/>" +
-                "   </content>" +
-                "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(8);
-        VespaModel model = tester.createModel(xmlWithNodes, true, deployStateWithClusterEndpoints("container1", "container2"));
-
-        assertEquals(2, model.getContentClusters().get("content1").getRootGroup().getNodes().size(), "Nodes in content1");
-        assertEquals(2, model.getContainerClusters().get("container1").getContainers().size(), "Nodes in container1");
-        assertEquals(3, model.getContentClusters().get("content2").getRootGroup().getNodes().size(), "Nodes in content2");
-        assertEquals(3, model.getContainerClusters().get("container2").getContainers().size(), "Nodes in container2");
-    }
-
-    @Test
-    public void testNonExistingCombinedClusterReference() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                "<services>" +
-                "  <container version='1.0' id='container1'>" +
-                "     <nodes of='container2'/>" +
-                "  </container>" +
-                "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(2);
-        try {
-            tester.createModel(xmlWithNodes, true);
-            fail("Expected exception");
-        }
-        catch (IllegalArgumentException e) {
-            assertEquals("container cluster 'container1' contains an invalid reference: referenced service 'container2' is not defined", Exceptions.toMessageString(e));
-        }
-    }
-
-    @Test
-    public void testInvalidCombinedClusterReference() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                "<services>" +
-                "  <container version='1.0' id='container1'>" +
-                "     <nodes of='container2'/><!-- invalid; only content clusters can be referenced -->" +
-                "  </container>" +
-                "  <container version='1.0' id='container2'>" +
-                "     <nodes count='2'/>" +
-                "  </container>" +
-                "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(2);
-        try {
-            tester.createModel(xmlWithNodes, true);
-            fail("Expected exception");
-        }
-        catch (IllegalArgumentException e) {
-            assertEquals("container cluster 'container1' contains an invalid reference: service 'container2' is not a content service", Exceptions.toMessageString(e));
-        }
-    }
-
-    @Test
-    public void testCombinedClusterWithZooKeeperFails() {
-        String xmlWithNodes =
-                "<?xml version='1.0' encoding='utf-8' ?>" +
-                        "<services>" +
-                        "  <container version='1.0' id='container1'>" +
-                        "     <search/>" +
-                        "     <nodes of='content1'/>" +
-                        "     <zookeeper />" +
-                        "  </container>" +
-                        "  <content version='1.0' id='content1'>" +
-                        "     <redundancy>2</redundancy>" +
-                        "     <documents>" +
-                        "       <document type='type1' mode='index'/>" +
-                        "     </documents>" +
-                        "     <nodes count='2'>" +
-                        "       <resources vcpu='1' memory='3Gb' disk='9Gb'/>" +
-                        "     </nodes>" +
-                        "   </content>" +
-                        "</services>";
-        VespaModelTester tester = new VespaModelTester();
-        tester.addHosts(2);
-        try {
-            tester.createModel(xmlWithNodes, true);
-            fail("ZooKeeper should not be allowed on combined clusters");
-        } catch (IllegalArgumentException e) {
-            assertEquals("A combined cluster cannot run ZooKeeper", e.getMessage());
-        }
     }
 
     @Test
@@ -1168,7 +933,7 @@ public class ModelProvisioningTest {
         String services =
                 "<?xml version='1.0' encoding='utf-8' ?>" +
                         "<services>" +
-                        "  <admin version='3.0'>" +
+                        "  <admin version='4.0'>" +
                         "    <nodes count='3'/>" + // Ignored
                         "  </admin>" +
                         "  <content version='1.0' id='bar'>" +
@@ -1307,7 +1072,7 @@ public class ModelProvisioningTest {
         String services =
                 "<?xml version='1.0' encoding='utf-8' ?>" +
                         "<services>" +
-                        "  <admin version='3.0'>" +
+                        "  <admin version='4.0'>" +
                         "    <nodes count='3'/>" + // Ignored
                         "  </admin>" +
                         "  <container version='1.0' id='container'>" +
@@ -1355,7 +1120,7 @@ public class ModelProvisioningTest {
         String services =
                 "<?xml version='1.0' encoding='utf-8' ?>\n" +
                         "<services>" +
-                        "  <admin version='3.0'>" +
+                        "  <admin version='4.0'>" +
                         "    <nodes count='3'/>" + // Ignored
                         "  </admin>" +
                         "  <content version='1.0' id='bar'>" +
@@ -1459,7 +1224,7 @@ public class ModelProvisioningTest {
         String services =
                 "<?xml version='1.0' encoding='utf-8' ?>\n" +
                         "<services>" +
-                        "  <admin version='3.0'>" +
+                        "  <admin version='4.0'>" +
                         "    <nodes count='3'/>" + // Ignored
                         "  </admin>" +
                         "  <content version='1.0' id='bar'>" +
@@ -2457,6 +2222,92 @@ public class ModelProvisioningTest {
     }
 
     @Test
+    public void test1NodePerGroupAllowedDown() {
+        String servicesXml =
+                "<?xml version='1.0' encoding='utf-8' ?>" +
+                        "<services>" +
+                        "  <container version='1.0' id='qrs'>" +
+                        "     <nodes count='1'/>" +
+                        "  </container>" +
+                        "  <content version='1.0' id='content'>" +
+                        "     <coverage-policy>%s</coverage-policy>" +
+                        "     <redundancy>1</redundancy>" +
+                        "     <documents>" +
+                        "       <document type='type1' mode='index'/>" +
+                        "     </documents>" +
+                        "    <nodes count='2' groups='2'/>" +
+                        "    %s" +
+                        "  </content>" +
+                        "</services>";
+        {
+            VespaModelTester tester = new VespaModelTester();
+            tester.addHosts(6);
+            VespaModel model = tester.createModel(servicesXml.formatted("node", ""), true, deployStateWithClusterEndpoints("qrs").properties(new TestProperties()));
+
+            var fleetControllerConfigBuilder = new FleetcontrollerConfig.Builder();
+            model.getConfig(fleetControllerConfigBuilder, "admin/standalone/cluster-controllers/0/components/clustercontroller-content-configurer");
+            assertEquals(0, fleetControllerConfigBuilder.build().max_number_of_groups_allowed_to_be_down());
+        }
+
+        {
+            VespaModelTester tester = new VespaModelTester();
+            tester.addHosts(6);
+            VespaModel model = tester.createModel(servicesXml.formatted("group", ""), true, deployStateWithClusterEndpoints("qrs").properties(new TestProperties()));
+
+            var fleetControllerConfigBuilder = new FleetcontrollerConfig.Builder();
+            model.getConfig(fleetControllerConfigBuilder, "admin/standalone/cluster-controllers/0/components/clustercontroller-content-configurer");
+            assertEquals(-1, fleetControllerConfigBuilder.build().max_number_of_groups_allowed_to_be_down());
+        }
+
+        {
+            VespaModelTester tester = new VespaModelTester();
+            tester.addHosts(6);
+            assertThrows(IllegalArgumentException.class, () ->
+            tester.createModel(servicesXml.formatted("node",
+                                                     """
+                                                     <tuning>
+                                                       <cluster-controller>
+                                                         <groups-allowed-down-ratio>0.5</groups-allowed-down-ratio>
+                                                       </cluster-controller>
+                                                     </tuning>
+                                                     """),
+                               true, deployStateWithClusterEndpoints("qrs").properties(new TestProperties())));
+        }
+    }
+
+    @Test
+    public void test2GroupsDefaultCoveragePolicy() {
+        String servicesXml =
+                "<?xml version='1.0' encoding='utf-8' ?>" +
+                        "<services>" +
+                        "  <container version='1.0' id='qrs'>" +
+                        "     <nodes count='1'/>" +
+                        "  </container>" +
+                        "  <content version='1.0' id='content'>" +
+                        "     <coverage-policy>group</coverage-policy>" +
+                        "     <redundancy>1</redundancy>" +
+                        "     <documents>" +
+                        "       <document type='type1' mode='index'/>" +
+                        "     </documents>" +
+                        "    <nodes count='2' groups='2'/>" +
+                        "  </content>" +
+                        "</services>";
+
+        VespaModelTester tester = new VespaModelTester();
+        tester.addHosts(6);
+        DeployLoggerStub logger = new DeployLoggerStub();
+        tester.createModel(servicesXml, true, deployStateWithClusterEndpoints("qrs")
+                .properties(new TestProperties())
+                .deployLogger(logger));
+
+        assertEquals("Coverage policy is 'group', but with 2 groups in the cluster all load" +
+                             " will be placed on 1 group when the other group" +
+                             " is allowed to be down when doing maintenance or upgrades." +
+                             " This might lead to overload. See https://docs.vespa.ai/en/reference/services-content.html#coverage-policy.",
+                     logger.entries.get(0).message);
+    }
+
+    @Test
     public void containerWithZooKeeperSuboptimalNodeCountDuringRetirement() {
         String servicesXml =
                 "<?xml version='1.0' encoding='utf-8' ?>" +
@@ -2683,18 +2534,13 @@ public class ModelProvisioningTest {
         assertTrue(logdConfig.logserver().use());
     }
 
-    private static void assertProvisioned(int nodeCount, ClusterSpec.Id id, ClusterSpec.Id combinedId,
-                                          ClusterSpec.Type type, VespaModel model) {
+    private static void assertProvisioned(int nodeCount, ClusterSpec.Id id, ClusterSpec.Type type, VespaModel model) {
         assertEquals(nodeCount,
                      model.hostSystem().getHosts().stream()
                           .map(h -> h.spec().membership().get().cluster())
-                          .filter(spec -> spec.id().equals(id) && spec.type().equals(type) && spec.combinedId().equals(Optional.ofNullable(combinedId)))
+                          .filter(spec -> spec.id().equals(id) && spec.type().equals(type))
                           .count(),
-                     "Nodes in cluster " + id + " with type " + type + (combinedId != null ? ", combinedId " + combinedId : ""));
-    }
-
-    private static void assertProvisioned(int nodeCount, ClusterSpec.Id id, ClusterSpec.Type type, VespaModel model) {
-        assertProvisioned(nodeCount, id, null, type, model);
+                     "Nodes in cluster " + id + " with type " + type);
     }
 
     private static boolean hostNameExists(HostSystem hostSystem, String hostname) {

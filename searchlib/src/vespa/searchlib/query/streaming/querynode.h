@@ -2,16 +2,12 @@
 #pragma once
 
 #include "hit.h"
-#include "querynoderesultbase.h"
-
-namespace search { class SimpleQueryStackDumpIterator; }
+#include <memory>
 
 namespace search::streaming {
 
-class MultiTerm;
 class QueryTerm;
 class QueryNode;
-class QueryNodeResultFactory;
 
 /// Typedef a simple list that contains references to QueryNodes.
 using QueryNodeRefList = std::vector<QueryNode *>;
@@ -28,24 +24,15 @@ using ConstQueryTermList = std::vector<const QueryTerm *>;
 */
 class QueryNode
 {
-    static std::unique_ptr<QueryNode> build_nearest_neighbor_query_node(const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator& queryRep);
-    static void populate_multi_term(Normalizing string_normalize_mode, MultiTerm& mt, SimpleQueryStackDumpIterator& queryRep);
-    static std::unique_ptr<QueryNode> build_dot_product_term(const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator& queryRep);
-    static std::unique_ptr<QueryNode> build_wand_term(const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator& queryRep);
-    static std::unique_ptr<QueryNode> build_weighted_set_term(const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator& queryRep);
-    static std::unique_ptr<QueryNode> build_phrase_term(const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator& queryRep);
-    static std::unique_ptr<QueryNode> build_equiv_term(const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator& queryRep, bool allow_rewrite);
-    static std::unique_ptr<QueryNode> build_same_element_term(const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator& queryRep);
-    static void skip_unknown(SimpleQueryStackDumpIterator& queryRep);
- public:
-  using UP = std::unique_ptr<QueryNode>;
-
+public:
   virtual ~QueryNode() = default;
   /// This evalutes if the subtree starting here evaluates to true.
   virtual bool evaluate() const = 0;
   /// This return the hitList for this subtree. Does only give meaning in a
   /// phrase search or any other search that requires position info.
   virtual const HitList & evaluateHits(HitList & hl) const;
+  // Populate element_ids with the element ids matching the query for this subtree.
+  virtual void get_element_ids(std::vector<uint32_t>& element_ids) const = 0;
   /// Clears all the hitlists so the query tree can be reused.
   virtual void reset() = 0;
   /// Gives you all leafs of this tree.
@@ -59,11 +46,10 @@ class QueryNode
   virtual size_t depth() const { return 1; }
   /// Return the width of this tree.
   virtual size_t width() const { return 1; }
-  static UP Build(const QueryNode * parent, const QueryNodeResultFactory& factory, SimpleQueryStackDumpIterator & queryRep, bool allowRewrite);
 };
 
 /// A list conating the QuerNode objects. With copy/assignment.
-using QueryNodeList = std::vector<QueryNode::UP>;
+using QueryNodeList = std::vector<std::unique_ptr<QueryNode>>;
 
 }
 

@@ -1,4 +1,32 @@
 {
+  "com.yahoo.data.JsonProducer" : {
+    "superClass" : "java.lang.Object",
+    "interfaces" : [ ],
+    "attributes" : [
+      "public",
+      "interface",
+      "abstract"
+    ],
+    "methods" : [
+      "public abstract java.lang.StringBuilder writeJson(java.lang.StringBuilder)",
+      "public java.lang.String toJson()"
+    ],
+    "fields" : [ ]
+  },
+  "com.yahoo.data.XmlProducer" : {
+    "superClass" : "java.lang.Object",
+    "interfaces" : [ ],
+    "attributes" : [
+      "public",
+      "interface",
+      "abstract"
+    ],
+    "methods" : [
+      "public abstract java.lang.StringBuilder writeXML(java.lang.StringBuilder)",
+      "public java.lang.String toXML()"
+    ],
+    "fields" : [ ]
+  },
   "com.yahoo.data.access.ArrayTraverser" : {
     "superClass" : "java.lang.Object",
     "interfaces" : [ ],
@@ -333,8 +361,10 @@
       "public void <init>(java.lang.String, java.io.Reader)",
       "public java.lang.String getName()",
       "public java.io.Reader getReader()",
+      "public int hashCode()",
+      "public boolean equals(java.lang.Object)",
       "public java.lang.String toString()",
-      "public static java.io.Reader nullReader()",
+      "public static java.io.Reader of(java.lang.CharSequence)",
       "public int read(java.nio.CharBuffer)",
       "public int read()",
       "public int read(char[])",
@@ -346,7 +376,8 @@
       "public void reset()",
       "public void close()",
       "public long transferTo(java.io.Writer)",
-      "public static void closeAll(java.util.List)"
+      "public static void closeAll(java.util.List)",
+      "public static java.io.Reader nullReader()"
     ],
     "fields" : [ ]
   },

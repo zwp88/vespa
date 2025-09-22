@@ -49,12 +49,15 @@ public:
         _initRange_tag(initRange_tag), _doSeek_tag(doSeek_tag),
         _doUnpack_tag(doUnpack_tag), _get_hits_tag(get_hits_tag),
         _or_hits_into_tag(or_hits_into_tag), _and_hits_into_tag(and_hits_into_tag) {}
+    ~ProfiledIterator() override;
     void initRange(uint32_t begin_id, uint32_t end_id) override;
     void doSeek(uint32_t docid) override;
     void doUnpack(uint32_t docid) override;
     std::unique_ptr<BitVector> get_hits(uint32_t begin_id) override;
     void or_hits_into(BitVector &result, uint32_t begin_id) override;
     void and_hits_into(BitVector &result, uint32_t begin_id) override;
+    void get_element_ids(uint32_t docid, std::vector<uint32_t>& element_ids) override;
+    void and_element_ids_into(uint32_t docid, std::vector<uint32_t>& element_ids) override;
     void visitMembers(vespalib::ObjectVisitor &visitor) const override;
     UP andWith(UP filter, uint32_t estimate) override { return _search->andWith(std::move(filter), estimate); }
     Trinary is_strict() const override { return _search->is_strict(); }

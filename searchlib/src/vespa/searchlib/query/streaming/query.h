@@ -27,9 +27,9 @@ public:
     static std::unique_ptr<QueryConnector> create(ParseItem::ItemType type, const QueryNodeResultFactory& factory);
     virtual bool isFlattenable(ParseItem::ItemType type) const { (void) type; return false; }
     const QueryNodeList & getChildren() const { return _children; }
-    virtual void addChild(QueryNode::UP child);
+    virtual void addChild(std::unique_ptr<QueryNode> child);
     size_t size() const { return _children.size(); }
-    const QueryNode::UP & operator [](size_t index) const { return _children[index]; }
+    const std::unique_ptr<QueryNode> & operator [](size_t index) const { return _children[index]; }
 private:
     std::string _opName;
     std::string _index;
@@ -43,7 +43,9 @@ class TrueNode : public QueryConnector
 {
 public:
     TrueNode() noexcept : QueryConnector("AND") { }
+    ~TrueNode() override;
     bool evaluate() const override;
+    void get_element_ids(std::vector<uint32_t>& element_ids) const override;
 };
 
 /** False operator. Matches nothing. */
@@ -51,7 +53,9 @@ class FalseNode : public QueryConnector
 {
 public:
     FalseNode() noexcept : QueryConnector("AND") { }
+    ~FalseNode() override;
     bool evaluate() const override;
+    void get_element_ids(std::vector<uint32_t>& element_ids) const override;
 };
 
 /**
@@ -62,8 +66,10 @@ class AndQueryNode : public QueryConnector
 public:
     AndQueryNode() noexcept : QueryConnector("AND") { }
     explicit AndQueryNode(const char * opName) noexcept : QueryConnector(opName) { }
+    ~AndQueryNode() override;
     bool evaluate() const override;
     bool isFlattenable(ParseItem::ItemType type) const override { return type == ParseItem::ITEM_AND; }
+    void get_element_ids(std::vector<uint32_t>& element_ids) const override;
 };
 
 /**
@@ -73,8 +79,10 @@ class AndNotQueryNode : public QueryConnector
 {
 public:
     AndNotQueryNode() noexcept : QueryConnector("ANDNOT") { }
+    ~AndNotQueryNode() override;
     bool evaluate() const override;
     bool isFlattenable(ParseItem::ItemType) const override { return false; }
+    void get_element_ids(std::vector<uint32_t>& element_ids) const override;
 };
 
 /**
@@ -85,11 +93,13 @@ class OrQueryNode : public QueryConnector
 public:
     OrQueryNode() noexcept : QueryConnector("OR") { }
     explicit OrQueryNode(const char * opName) noexcept : QueryConnector(opName) { }
+    ~OrQueryNode() override;
     bool evaluate() const override;
     bool isFlattenable(ParseItem::ItemType type) const override {
         return (type == ParseItem::ITEM_OR) ||
                (type == ParseItem::ITEM_WEAK_AND);
     }
+    void get_element_ids(std::vector<uint32_t>& element_ids) const override;
 };
 
 /**
@@ -100,7 +110,9 @@ class RankWithQueryNode : public QueryConnector
 public:
     RankWithQueryNode() noexcept : QueryConnector("RANK") { }
     explicit RankWithQueryNode(const char * opName) noexcept : QueryConnector(opName) { }
+    ~RankWithQueryNode() override;
     bool evaluate() const override;
+    void get_element_ids(std::vector<uint32_t>& element_ids) const override;
 };
 
 /**
@@ -116,6 +128,11 @@ class Query
 public:
     Query();
     Query(const QueryNodeResultFactory & factory, std::string_view queryRep);
+    Query(const Query&) = delete;
+    Query(Query&&) noexcept;
+    ~Query();
+    Query& operator=(const Query&) = delete;
+    Query& operator=(Query&&) noexcept;
     /// Will build the query tree
     bool build(const QueryNodeResultFactory & factory, std::string_view queryRep);
     /// Will clear the results from the querytree.
@@ -129,9 +146,9 @@ public:
     bool valid() const { return _root.get() != nullptr; }
     const QueryNode & getRoot() const { return *_root; }
     QueryNode & getRoot() { return *_root; }
-    static QueryNode::UP steal(Query && query) { return std::move(query._root); }
+    static std::unique_ptr<QueryNode> steal(Query && query) { return std::move(query._root); }
 private:
-    QueryNode::UP _root;
+    std::unique_ptr<QueryNode> _root;
 };
 
 }

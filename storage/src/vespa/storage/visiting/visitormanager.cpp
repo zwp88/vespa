@@ -14,6 +14,7 @@
 #include <vespa/vespalib/util/string_escape.h>
 #include <vespa/vespalib/util/stringfmt.h>
 #include <cassert>
+#include <unistd.h>
 
 #include <vespa/log/log.h>
 LOG_SETUP(".visitor.manager");
@@ -93,7 +94,7 @@ VisitorManager::onClose()
 {
     {
         std::lock_guard sync(_visitorLock);
-        for (auto& enqueued : _visitorQueue) {
+        for (const auto& enqueued : _visitorQueue) {
             auto reply = std::make_shared<api::CreateVisitorReply>(*enqueued._command);
             reply->setResult(api::ReturnCode(api::ReturnCode::ABORTED, "Shutting down storage node."));
             sendUp(reply);
@@ -588,7 +589,7 @@ VisitorManager::reportHtmlStatus(std::ostream& out,
 
             const auto now = _component.getClock().getMonotonicTime();
             for (const auto& enqueued : _visitorQueue) {
-                auto& cmd = enqueued._command;
+                const auto& cmd = enqueued._command;
                 assert(cmd);
                 out << "<li>"
                     << xml_content_escaped(cmd->getInstanceId()) << " - "

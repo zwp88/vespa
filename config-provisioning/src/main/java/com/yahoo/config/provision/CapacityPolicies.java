@@ -6,10 +6,13 @@ import com.yahoo.config.provision.NodeResources.DiskSpeed;
 
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.logging.Logger;
 
 import static com.yahoo.config.provision.NodeResources.Architecture;
 import static com.yahoo.config.provision.NodeResources.Architecture.x86_64;
 import static java.util.Objects.requireNonNull;
+import static java.util.logging.Level.FINE;
+import static java.util.logging.Level.INFO;
 
 /**
  * Defines the policies for assigning cluster capacity in various environments.
@@ -18,20 +21,30 @@ import static java.util.Objects.requireNonNull;
  */
 public class CapacityPolicies {
 
-    public record Tuning(Architecture adminClusterArchitecture, double logserverMemoryGiB, double clusterControllerMemoryGiB) {
+    private static final Logger log = Logger.getLogger(CapacityPolicies.class.getName());
+    private static final NodeResources MIN_KUBERNETES_RESOURCES = new NodeResources(0.5, 1, 10, 0.3);
 
-        public Tuning(Architecture adminClusterArchitecture, double logserverMemoryGiB) {
-            this(adminClusterArchitecture, logserverMemoryGiB, 0.0);
+    public record Tuning(Architecture adminClusterArchitecture, double logserverMemoryGiB,
+                         double clusterControllerMemoryGiB, long contentNodes) {
+
+        public Tuning(Architecture adminClusterArchitecture, double logserverMemoryGiB, long contentNodes) {
+            this(adminClusterArchitecture, logserverMemoryGiB, 0.0, contentNodes);
+        }
+
+        public Tuning(Architecture adminClusterArchitecture, double logserverMemoryGiB, double clusterControllerMemoryGiB) {
+            this(adminClusterArchitecture, logserverMemoryGiB, clusterControllerMemoryGiB, 0);
         }
 
         double logserverMem(double v) {
             double override = logserverMemoryGiB();
             return (override > 0) ? override : v;
         }
+
         double clusterControllerMem(double v) {
             double override = clusterControllerMemoryGiB();
             return (override > 0) ? override : v;
         }
+
     }
 
     private final Zone zone;
@@ -40,7 +53,7 @@ public class CapacityPolicies {
     private final Tuning tuning;
 
     public CapacityPolicies(Zone zone, Exclusivity exclusivity, ApplicationId applicationId, Architecture adminClusterArchitecture) {
-        this(zone, exclusivity, applicationId, new Tuning(adminClusterArchitecture, 0.0, 0.0));
+        this(zone, exclusivity, applicationId, new Tuning(adminClusterArchitecture, 0.0, 0.0, 0));
     }
 
     public CapacityPolicies(Zone zone, Exclusivity exclusivity, ApplicationId applicationId, Tuning tuning) {
@@ -115,12 +128,12 @@ public class CapacityPolicies {
     private NodeResources defaultResources(ClusterSpec clusterSpec) {
         var adminClusterArchitecture = tuning.adminClusterArchitecture();
         if (clusterSpec.type() == ClusterSpec.Type.admin) {
-            if (exclusivity.allocation(clusterSpec)) {
+            if (exclusivity.allocation(clusterSpec) && !zone.system().isKubernetes()) {
                 return smallestExclusiveResources().with(adminClusterArchitecture);
             }
 
             if (clusterSpec.id().value().equals("cluster-controllers")) {
-                return clusterControllerResources(clusterSpec, adminClusterArchitecture).with(adminClusterArchitecture);
+                return clusterControllerResources(clusterSpec, adminClusterArchitecture, tuning.contentNodes()).with(adminClusterArchitecture);
             }
 
             if (clusterSpec.id().value().equals("logserver")) {
@@ -144,13 +157,56 @@ public class CapacityPolicies {
         }
     }
 
-    private NodeResources clusterControllerResources(ClusterSpec clusterSpec, Architecture architecture) {
+    private NodeResources clusterControllerResources(ClusterSpec clusterSpec, Architecture architecture, long contentNodes) {
         // 1.32 fits floor(8/1.32) = 6 cluster controllers on each 8Gb host, and each will have
         // 1.32-(0.7+0.6)*(1.32/8) = 1.1 Gb real memory given current taxes.
         var memory = architecture == x86_64
                 ? tuning.clusterControllerMem(1.32)
                 : tuning.clusterControllerMem(1.50);
-        return versioned(clusterSpec, Map.of(new Version(0), new NodeResources(0.25, memory, 10, 0.3)));
+
+        var adjustedMemory = adjustClusterControllerMemory(memory, contentNodes);
+        // But go back to use overridden memory if set (through feature flag)
+        if (tuning.clusterControllerMemoryGiB() > 0.0) {
+            adjustedMemory = memory;
+        }
+
+        return versioned(clusterSpec, Map.of(new Version(0), new NodeResources(0.25, memory, 10, 0.3),
+                                             new Version(8, 575, 8), new NodeResources(0.25, adjustedMemory, 10, 0.3)));
+    }
+
+    // Adjust memory based on number of content nodes in all content clusters
+    // Note: nodeCount is 0 if unknown.
+    private static double adjustClusterControllerMemory(double memory, long nodeCount) {
+        int count = (int) nodeCount;
+        // We have seen clusters with ~100 nodes needing at least 1.6 GiB on x86_64
+        // Adjust memory based on number of content nodes (which is a simple way to model the O(n^2) behavior
+        // of the increase in communication between cluster controller and nodes (and thus memory)).
+        // Increase in steps to avoid changes of memory allocation with small changes in node count.
+        double adjustment;
+        if (isBetween(count, 0, 50)) {
+            adjustment = 0;
+        } else if (isBetween(count, 50, 100)) {
+            adjustment = 0.15;
+        } else if (isBetween(count, 100, 200)) {
+            adjustment = 0.3;
+        } else if (isBetween(count, 200, 300)) {
+            adjustment = 0.45;
+        } else {
+            adjustment = 0.6;
+        }
+
+        double newMemory = memory + adjustment;
+        if (count >= 50) {
+            log.log(INFO, "Adjusted cluster controller memory (" + count + " content nodes): " + newMemory + " GiB");
+        } else {
+            log.log(FINE, "Not adjusting cluster controller memory (" + count + " content nodes): " + newMemory + " GiB");
+        }
+        return newMemory;
+    }
+
+    // is between lower (inclusive) and upper (exclusive)
+    public static boolean isBetween(int x, int lower, int upper) {
+        return lower <= x && x < upper;
     }
 
     private NodeResources logserverResources(Architecture architecture) {
@@ -167,6 +223,7 @@ public class CapacityPolicies {
 
     // The lowest amount of resources that can be exclusive allocated (i.e. a matching host flavor for this exists)
     private NodeResources smallestExclusiveResources() {
+        if (zone.system().isKubernetes()) return MIN_KUBERNETES_RESOURCES;
         return zone.cloud().name() == CloudName.AZURE || zone.cloud().name() == CloudName.GCP
                 ? new NodeResources(2, 8, 50, 0.3)
                 : new NodeResources(0.5, 8, 50, 0.3);
@@ -174,6 +231,7 @@ public class CapacityPolicies {
 
     // The lowest amount of resources that can be shared (i.e. a matching host flavor for this exists)
     private NodeResources smallestSharedResources() {
+        if (zone.system().isKubernetes()) throw new IllegalStateException("Not expecting shared nodes in Kubernetes");
         return zone.cloud().name() == CloudName.GCP
                 ? new NodeResources(1, 4, 50, 0.3)
                 : new NodeResources(0.5, 2, 50, 0.3);

@@ -184,3 +184,6 @@
 #define CID_search_expression_MultiArgPredicateNode         SEARCHLIB_CID(175)
 #define CID_search_expression_OrPredicateNode               SEARCHLIB_CID(176)
 #define CID_search_expression_AndPredicateNode              SEARCHLIB_CID(177)
+#define CID_search_expression_RangePredicateNode            SEARCHLIB_CID(178)
+
+#define CID_search_aggregation_QuantileAggregationResult    SEARCHLIB_CID(179)

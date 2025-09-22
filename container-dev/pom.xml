@@ -184,6 +184,10 @@
           <groupId>org.lz4</groupId>
           <artifactId>lz4-java</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-compress</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -222,6 +226,10 @@
         </exclusion>
         <exclusion>
           <groupId>com.google.re2j</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.datasketches</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>

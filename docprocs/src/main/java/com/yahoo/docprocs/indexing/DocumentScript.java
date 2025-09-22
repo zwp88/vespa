@@ -30,31 +30,31 @@ import java.util.Set;
 /**
  * @author Simon Thoresen Hult
  */
-public class DocumentScript {
+class DocumentScript {
 
     private final DocumentType documentType;
     private final Set<String> inputFields;
     private final ScriptExpression expression;
 
-    public DocumentScript(DocumentType documentType, Collection<String> inputFields, ScriptExpression expression) {
+    DocumentScript(DocumentType documentType, Collection<String> inputFields, ScriptExpression expression) {
         this.documentType = documentType;
         this.inputFields = new HashSet<>(inputFields);
         this.expression = expression;
         expression.resolve(documentType);
     }
 
-    public ScriptExpression getExpression() { return expression; }
+    ScriptExpression getExpression() { return expression; }
 
-    public Document execute(FieldValuesFactory fieldValuesFactory, Document document) {
+    Document execute(FieldValuesFactory fieldValuesFactory, Document document, boolean isReindexing) {
         for (var i = document.iterator(); i.hasNext(); ) {
             Map.Entry<Field, FieldValue> entry = i.next();
             requireThatFieldIsDeclaredInDocument(entry.getKey());
             removeAnyLinguisticsSpanTree(entry.getValue());
         }
-        return expression.execute(fieldValuesFactory, document);
+        return expression.execute(fieldValuesFactory, document, isReindexing);
     }
 
-    public DocumentUpdate execute(FieldValuesFactory fieldValuesFactory, DocumentUpdate update) {
+    DocumentUpdate execute(FieldValuesFactory fieldValuesFactory, DocumentUpdate update) {
         for (FieldUpdate fieldUpdate : update.fieldUpdates()) {
             requireThatFieldIsDeclaredInDocument(fieldUpdate.getField());
             for (ValueUpdate<?> valueUpdate : fieldUpdate.getValueUpdates()) {

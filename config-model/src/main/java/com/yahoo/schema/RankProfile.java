@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -120,11 +121,11 @@ public class RankProfile implements Cloneable {
     private double globalPhaseRankScoreDropLimit = -Double.MAX_VALUE;
 
     private Set<ReferenceNode> summaryFeatures;
-    private String inheritedSummaryFeaturesProfileName;
+    private List<String> inheritedSummaryFeaturesProfileNames = new ArrayList<>();
 
     private Set<ReferenceNode> matchFeatures;
     private Set<ReferenceNode> hiddenMatchFeatures;
-    private String inheritedMatchFeaturesProfileName;
+    private List<String> inheritedMatchFeaturesProfileNames = new ArrayList<>();
 
     private Set<ReferenceNode> rankFeatures;
 
@@ -589,11 +590,11 @@ public class RankProfile implements Cloneable {
      * the final (with inheritance included) summary features of the given parent.
      * The profile must be one which is directly inherited by this.
      */
-    public void setInheritedSummaryFeatures(String parentProfile) {
+    public void addInheritedSummaryFeatures(String parentProfile) {
         if ( ! inheritedNames().contains(parentProfile))
             throw new IllegalArgumentException("This can only inherit the summary features of a directly inherited profile, " +
                                                "but is attempting to inherit '" + parentProfile);
-        this.inheritedSummaryFeaturesProfileName = parentProfile;
+        this.inheritedSummaryFeaturesProfileNames.add(parentProfile);
     }
 
     /**
@@ -605,45 +606,53 @@ public class RankProfile implements Cloneable {
      * The profile must be one which which is directly inherited by this.
      *
      */
-    public void setInheritedMatchFeatures(String parentProfile) {
+    public void addInheritedMatchFeatures(String parentProfile) {
         if ( ! inheritedNames().contains(parentProfile))
             throw new IllegalArgumentException("This can only inherit the match features of a directly inherited profile," +
                                                "but is attempting to inherit '" + parentProfile);
-        this.inheritedMatchFeaturesProfileName = parentProfile;
+        this.inheritedMatchFeaturesProfileNames.add(parentProfile);
     }
 
     /** Returns a read-only view of the summary features to use in this profile. This is never null */
     public Set<ReferenceNode> getSummaryFeatures() {
-        if (inheritedSummaryFeaturesProfileName != null && summaryFeatures != null) {
-            Set<ReferenceNode> combined = new HashSet<>();
-            RankProfile inherited = inherited().stream()
-                                               .filter(p -> p.name().equals(inheritedSummaryFeaturesProfileName))
-                                               .findAny()
-                                               .orElseThrow();
-            combined.addAll(inherited.getSummaryFeatures());
-            combined.addAll(summaryFeatures);
-            return Collections.unmodifiableSet(combined);
+        if (inheritedSummaryFeaturesProfileNames.isEmpty()) {
+            if (summaryFeatures != null)
+                return Collections.unmodifiableSet(summaryFeatures);
+            return uniquelyInherited(RankProfile::getSummaryFeatures, f -> ! f.isEmpty(), "summary features")
+                    .orElse(Set.of());
         }
-        if (summaryFeatures != null) return Collections.unmodifiableSet(summaryFeatures);
-        return uniquelyInherited(RankProfile::getSummaryFeatures, f -> ! f.isEmpty(), "summary features")
-                .orElse(Set.of());
+        Set<ReferenceNode> combined = new HashSet<>();
+        for (String inheritName : inheritedSummaryFeaturesProfileNames) {
+            RankProfile inherited = inherited().stream()
+                    .filter(p -> p.name().equals(inheritName))
+                    .findAny()
+                    .orElseThrow();
+            combined.addAll(inherited.getSummaryFeatures());
+        }
+        if (summaryFeatures != null)
+            combined.addAll(summaryFeatures);
+        return Collections.unmodifiableSet(combined);
     }
 
     /** Returns a read-only view of the match features to use in this profile. This is never null */
     public Set<ReferenceNode> getMatchFeatures() {
-        if (inheritedMatchFeaturesProfileName != null && matchFeatures != null) {
-            Set<ReferenceNode> combined = new HashSet<>();
-            RankProfile inherited = inherited().stream()
-                                               .filter(p -> p.name().equals(inheritedMatchFeaturesProfileName))
-                                               .findAny()
-                                               .orElseThrow();
-            combined.addAll(inherited.getMatchFeatures());
-            combined.addAll(matchFeatures);
-            return Collections.unmodifiableSet(combined);
+        if (inheritedMatchFeaturesProfileNames.isEmpty()) {
+            if (matchFeatures != null)
+                return Collections.unmodifiableSet(matchFeatures);
+            return uniquelyInherited(RankProfile::getMatchFeatures, f -> ! f.isEmpty(), "match features")
+                    .orElse(Set.of());
         }
-        if (matchFeatures != null) return Collections.unmodifiableSet(matchFeatures);
-        return uniquelyInherited(RankProfile::getMatchFeatures, f -> ! f.isEmpty(), "match features")
-                .orElse(Set.of());
+        Set<ReferenceNode> combined = new HashSet<>();
+        for (String inheritName : inheritedMatchFeaturesProfileNames) {
+            RankProfile inherited = inherited().stream()
+                    .filter(p -> p.name().equals(inheritName))
+                    .findAny()
+                    .orElseThrow();
+            combined.addAll(inherited.getMatchFeatures());
+        }
+        if (matchFeatures != null)
+            combined.addAll(matchFeatures);
+        return Collections.unmodifiableSet(combined);
     }
 
     public Set<ReferenceNode> getHiddenMatchFeatures() {
@@ -1214,7 +1223,7 @@ public class RankProfile implements Cloneable {
             }
             List<FeatureList> addIfMissing = new ArrayList<>();
             for (String input : needInputs) {
-                if (input.startsWith("constant(") || input.startsWith("query(")) {
+                if (input.startsWith("constant(") || input.startsWith("query(") || input.equals("relevanceScore")) {
                     continue;
                 }
                 try {
@@ -1825,7 +1834,8 @@ public class RankProfile implements Cloneable {
         for (var inheritedProfile : inherited()) {
             all.putAll(inheritedProfile.getFeatureNormalizers());
         }
-        for (var n : featureNormalizers) {
+        // Use a copy to avoid concurrent modification exceptions, see addFeatureNormalizer() below
+        for (var n : new ArrayList<>(featureNormalizers)) {
             all.put(n.name(), n);
         }
         return all;

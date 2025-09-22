@@ -43,14 +43,17 @@ public:
           _store(store)
     {
     }
+    ~GidAllSearchIterator() override;
 };
+
+GidAllSearchIterator::~GidAllSearchIterator() = default;
 
 class GidStrictAllSearchIterator : public GidAllSearchIterator
 {
 private:
     uint32_t _numDocs;
 
-    virtual void
+    void
     doSeek(uint32_t docId) override
     {
         if (_store.validLidFast(docId)) {
@@ -73,7 +76,10 @@ public:
           _numDocs(store.getNumDocs())
     {
     }
+    ~GidStrictAllSearchIterator() override;
 };
+
+GidStrictAllSearchIterator::~GidStrictAllSearchIterator() = default;
 
 class GidSearchIterator : public GidAllSearchIterator
 {
@@ -97,7 +103,10 @@ public:
           _gid(gid)
     {
     }
+    ~GidSearchIterator() override;
 };
+
+GidSearchIterator::~GidSearchIterator() = default;
 
 }
 

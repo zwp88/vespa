@@ -5,6 +5,7 @@
 #include "matchdatareservevisitor.h"
 #include "resolveviewvisitor.h"
 #include "sameelementmodifier.h"
+#include "tag_needed_handles.h"
 #include "termdataextractor.h"
 #include "unpacking_iterators_optimizer.h"
 #include <vespa/document/datatype/positiondatatype.h>
@@ -151,17 +152,22 @@ class NeedsRankingVisitor : public TemplateTermVisitor<NeedsRankingVisitor, Prot
 {
     bool _needs_ranking;
 public:
-    NeedsRankingVisitor()
-        : TemplateTermVisitor<NeedsRankingVisitor, ProtonNodeTypes>(),
-          _needs_ranking(false)
-    {
-    }
+    NeedsRankingVisitor();
+    ~NeedsRankingVisitor() override;
     template <class TermNode> void visitTerm(TermNode&) { }
     void visit(ProtonNodeTypes::WeakAnd&) override { _needs_ranking = true; }
     void visitTerm(ProtonNodeTypes::WandTerm&) { _needs_ranking = true; }
     void visitTerm(ProtonNodeTypes::NearestNeighborTerm&) { _needs_ranking = true; }
     bool needs_ranking() const noexcept { return _needs_ranking; }
 };
+
+NeedsRankingVisitor::NeedsRankingVisitor()
+    : TemplateTermVisitor<NeedsRankingVisitor, ProtonNodeTypes>(),
+      _needs_ranking(false)
+{
+}
+
+NeedsRankingVisitor::~NeedsRankingVisitor() = default;
 
 }  // namespace
 
@@ -223,6 +229,12 @@ Query::reserveHandles(const IRequestContext & requestContext, ISearchContext &co
 }
 
 void
+Query::tag_needed_handles(HandleRecorder& handle_recorder, const search::fef::IIndexEnvironment& index_env)
+{
+    proton::matching::tag_needed_handles(*_query_tree, handle_recorder, index_env);
+}
+
+void
 Query::enumerate_blueprint_nodes() noexcept
 {
     _blueprint->enumerate(1);
@@ -232,7 +244,8 @@ void
 Query::optimize(InFlow in_flow, bool sort_by_cost)
 {
     _in_flow = in_flow;
-    auto opts = Blueprint::Options().sort_by_cost(sort_by_cost).allow_force_strict(sort_by_cost);
+    bool allow_force_strict = sort_by_cost && in_flow.strict();
+    auto opts = Blueprint::Options().sort_by_cost(sort_by_cost).allow_force_strict(allow_force_strict);
     _blueprint = Blueprint::optimize_and_sort(std::move(_blueprint), in_flow, opts);
     LOG(debug, "optimized blueprint:\n%s\n", _blueprint->asString().c_str());
 }

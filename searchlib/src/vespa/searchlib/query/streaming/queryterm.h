@@ -23,6 +23,7 @@ class FuzzyTerm;
 class NearestNeighborQueryNode;
 class MultiTerm;
 class RegexpTerm;
+class SameElementQueryNode;
 
 /**
    This is a leaf in the Query tree. All terms are leafs.
@@ -76,6 +77,7 @@ public:
     void reset() override;
     void getLeaves(QueryTermList & tl) override;
     void getLeaves(ConstQueryTermList & tl) const override;
+    void get_element_ids(std::vector<uint32_t>& element_ids) const override;
 
     uint32_t            add(uint32_t field_id, uint32_t element_id, int32_t element_weight, uint32_t position);
     void                set_element_length(uint32_t hitlist_idx, uint32_t element_length);
@@ -110,10 +112,13 @@ public:
     virtual FuzzyTerm* as_fuzzy_term() noexcept;
     virtual const EquivQueryNode* as_equiv_query_node() const noexcept;
     virtual bool is_same_element_query_node() const noexcept;
+    virtual SameElementQueryNode* as_same_element_query_node() noexcept;
+    virtual const SameElementQueryNode* as_same_element_query_node() const noexcept;
     virtual void unpack_match_data(uint32_t docid, const fef::ITermData& td, fef::MatchData& match_data, const fef::IIndexEnvironment& index_env);
 protected:
     template <typename HitListType>
     static void unpack_match_data_helper(uint32_t docid, const fef::ITermData& td, fef::MatchData& match_data, const HitListType& hit_list, const QueryTerm& fl_term, bool term_filter, const fef::IIndexEnvironment& index_env);
+    static void get_element_ids_helper(std::vector<uint32_t>& element_ids, const HitList& hit_list);
     using QueryNodeResultBaseContainer = std::unique_ptr<QueryNodeResultBase>;
     HitList                      _hitList;
 private:

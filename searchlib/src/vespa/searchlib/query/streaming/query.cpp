@@ -2,6 +2,7 @@
 #include "query.h"
 #include "near_query_node.h"
 #include "onear_query_node.h"
+#include "query_builder.h"
 #include "same_element_query_node.h"
 #include <vespa/searchlib/parsequery/stackdumpiterator.h>
 #include <vespa/vespalib/objects/visit.hpp>
@@ -24,7 +25,7 @@ QueryConnector::QueryConnector(const char * opName) noexcept
 }
 
 void
-QueryConnector::addChild(QueryNode::UP child) {
+QueryConnector::addChild(std::unique_ptr<QueryNode> child) {
     _children.push_back(std::move(child));
 }
 
@@ -102,15 +103,32 @@ QueryConnector::create(ParseItem::ItemType type, const QueryNodeResultFactory& f
     }
 }
 
+TrueNode::~TrueNode() = default;
+
 bool
 TrueNode::evaluate() const
 {
     return true;
 }
 
-bool FalseNode::evaluate() const {
+void
+TrueNode::get_element_ids(std::vector<uint32_t>&) const
+{
+}
+
+FalseNode::~FalseNode() = default;
+
+bool FalseNode::evaluate() const
+{
     return false;
 }
+
+void
+FalseNode::get_element_ids(std::vector<uint32_t>&) const
+{
+}
+
+AndQueryNode::~AndQueryNode() = default;
 
 bool
 AndQueryNode::evaluate() const
@@ -120,6 +138,13 @@ AndQueryNode::evaluate() const
     }
     return true;
 }
+
+void
+AndQueryNode::get_element_ids(std::vector<uint32_t>&) const
+{
+}
+
+AndNotQueryNode::~AndNotQueryNode() = default;
 
 bool
 AndNotQueryNode::evaluate() const {
@@ -135,6 +160,13 @@ AndNotQueryNode::evaluate() const {
     return false;
 }
 
+void
+AndNotQueryNode::get_element_ids(std::vector<uint32_t>&) const
+{
+}
+
+OrQueryNode::~OrQueryNode() = default;
+
 bool
 OrQueryNode::evaluate() const {
     for (const auto & qn : getChildren()) {
@@ -142,6 +174,13 @@ OrQueryNode::evaluate() const {
     }
     return false;
 }
+
+void
+OrQueryNode::get_element_ids(std::vector<uint32_t>&) const
+{
+}
+
+RankWithQueryNode::~RankWithQueryNode() = default;
 
 bool
 RankWithQueryNode::evaluate() const {
@@ -156,6 +195,11 @@ RankWithQueryNode::evaluate() const {
     return firstOk;
 }
 
+void
+RankWithQueryNode::get_element_ids(std::vector<uint32_t>&) const
+{
+}
+
 Query::Query() = default;
 
 Query::Query(const QueryNodeResultFactory & factory, std::string_view queryRep)
@@ -163,6 +207,12 @@ Query::Query(const QueryNodeResultFactory & factory, std::string_view queryRep)
 {
     build(factory, queryRep);
 }
+
+Query::Query(Query&&) noexcept = default;
+
+Query::~Query() = default;
+
+Query& Query::operator=(Query&&) noexcept = default;
 
 bool
 Query::evaluate() const {
@@ -174,7 +224,7 @@ Query::build(const QueryNodeResultFactory & factory, std::string_view queryRep)
 {
     search::SimpleQueryStackDumpIterator stack(queryRep);
     if (stack.next()) {
-        _root = QueryNode::Build(nullptr, factory, stack, true);
+        _root = QueryBuilder().build(nullptr, factory, stack, true);
     }
     return valid();
 }

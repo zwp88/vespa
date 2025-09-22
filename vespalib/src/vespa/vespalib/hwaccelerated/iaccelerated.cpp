@@ -1,6 +1,7 @@
 // Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 
 #include "iaccelerated.h"
+#include "highway.h"
 #ifdef __x86_64__
 #    define VESPA_HWACCEL_ARCH_NAME "x86-64"
 #    include "x64_generic.h"
@@ -140,26 +141,29 @@ namespace target {
 // This is mostly just to be able to experiment in a controlled manner with levels
 // _higher_ than what's enabled by default.
 
+// TODO make it possible to select specific targets within Highway
+constexpr uint32_t HIGHWAY           = 4;
 #ifdef __x86_64__
-constexpr static uint32_t AVX3_DL           = 3;
-constexpr static uint32_t AVX3              = 2;
-constexpr static uint32_t AVX2              = 1;
-constexpr static uint32_t X64_GENERIC       = 0;
+constexpr uint32_t AVX3_DL           = 3;
+constexpr uint32_t AVX3              = 2;
+constexpr uint32_t AVX2              = 1;
+constexpr uint32_t X64_GENERIC       = 0;
 #else
-constexpr static uint32_t SVE2              = 3;
-constexpr static uint32_t SVE               = 2;
-constexpr static uint32_t NEON_FP16_DOTPROD = 1;
-constexpr static uint32_t NEON              = 0;
+constexpr uint32_t SVE2              = 3;
+constexpr uint32_t SVE               = 2;
+constexpr uint32_t NEON_FP16_DOTPROD = 1;
+constexpr uint32_t NEON              = 0;
 #endif
 
 #ifdef __x86_64__
-constexpr static uint32_t DEFAULT_LEVEL = AVX3;
+constexpr uint32_t DEFAULT_LEVEL = AVX3;
 #else
-constexpr static uint32_t DEFAULT_LEVEL = NEON_FP16_DOTPROD;
+constexpr uint32_t DEFAULT_LEVEL = NEON_FP16_DOTPROD;
 #endif
 
 [[nodiscard]] const char* level_u32_to_str(uint32_t level) noexcept {
     switch (level) {
+    case HIGHWAY:           return "HIGHWAY";
 #ifdef __x86_64__
     case AVX3_DL:           return "AVX3_DL";
     case AVX3:              return "AVX3";
@@ -176,6 +180,9 @@ constexpr static uint32_t DEFAULT_LEVEL = NEON_FP16_DOTPROD;
 }
 
 [[nodiscard]] uint32_t level_str_to_u32(const std::string& str) noexcept {
+    if (str == "HIGHWAY") {
+        return HIGHWAY;
+    }
 #ifdef __x86_64__
     if (str == "AVX3_DL") {
         return AVX3_DL;
@@ -248,6 +255,10 @@ EnabledTargetLevel EnabledTargetLevel::create_from_env_var() {
     const uint32_t wanted_level = (maybe_var != nullptr)
             ? target::level_str_to_u32(std::string(maybe_var))
             : target::DEFAULT_LEVEL;
+    // Highway is always a supported level, so short-circuit if it's wanted
+    if (wanted_level == target::HIGHWAY) {
+        return EnabledTargetLevel(target::HIGHWAY);
+    }
     const uint32_t supported_level = target::max_supported_level();
     if (wanted_level > supported_level && (maybe_var != nullptr)) {
         LOG(info, "Requested vectorization target level is %s, but platform only supports %s.",
@@ -258,30 +269,9 @@ EnabledTargetLevel EnabledTargetLevel::create_from_env_var() {
     return EnabledTargetLevel(enabled_level);
 }
 
-IAccelerated::UP create_accelerator() {
+[[nodiscard]] EnabledTargetLevel enabled_target_level() {
     static auto target_level = EnabledTargetLevel::create_from_env_var();
-#ifdef __x86_64__
-    if (target_level.is_enabled(target::AVX3_DL)) {
-        return std::make_unique<Avx3DlAccelerator>();
-    }
-    if (target_level.is_enabled(target::AVX3)) {
-        return std::make_unique<Avx3Accelerator>();
-    }
-    if (target_level.is_enabled(target::AVX2)) {
-        return std::make_unique<Avx2Accelerator>();
-    }
-#else // aarch64
-    if (target_level.is_enabled(target::SVE2)) {
-        return std::make_unique<Sve2Accelerator>();
-    }
-    if (target_level.is_enabled(target::SVE)) {
-        return std::make_unique<SveAccelerator>();
-    }
-    if (target_level.is_enabled(target::NEON_FP16_DOTPROD)) {
-        return std::make_unique<NeonFp16DotprodAccelerator>();
-    }
-#endif
-    return IAccelerated::create_platform_baseline_accelerator();
+    return target_level;
 }
 
 template<typename T>
@@ -293,7 +283,7 @@ std::vector<T> createAndFill(size_t sz) {
     return v;
 }
 
-template<typename T>
+template <typename T, typename SumT = T>
 void
 verifyDotproduct(const IAccelerated & accel)
 {
@@ -302,11 +292,11 @@ verifyDotproduct(const IAccelerated & accel)
     std::vector<T> a = createAndFill<T>(testLength);
     std::vector<T> b = createAndFill<T>(testLength);
     for (size_t j(0); j < 0x20; j++) {
-        T sum(0);
+        SumT sum(0);
         for (size_t i(j); i < testLength; i++) {
             sum += a[i]*b[i];
         }
-        T hwComputedSum(accel.dotProduct(&a[j], &b[j], testLength - j));
+        SumT hwComputedSum(accel.dotProduct(&a[j], &b[j], testLength - j));
         if (sum != hwComputedSum) {
             fprintf(stderr, "Accelerator is not computing dotproduct correctly.\n");
             LOG_ABORT("should not be reached");
@@ -314,7 +304,7 @@ verifyDotproduct(const IAccelerated & accel)
     }
 }
 
-template<typename T>
+template <typename T, typename SumT = T>
 void
 verifyEuclideanDistance(const IAccelerated & accel) {
     const size_t testLength(255);
@@ -322,11 +312,11 @@ verifyEuclideanDistance(const IAccelerated & accel) {
     std::vector<T> a = createAndFill<T>(testLength);
     std::vector<T> b = createAndFill<T>(testLength);
     for (size_t j(0); j < 0x20; j++) {
-        T sum(0);
+        SumT sum(0);
         for (size_t i(j); i < testLength; i++) {
             sum += (a[i] - b[i]) * (a[i] - b[i]);
         }
-        T hwComputedSum(accel.squaredEuclideanDistance(&a[j], &b[j], testLength - j));
+        SumT hwComputedSum(accel.squaredEuclideanDistance(&a[j], &b[j], testLength - j));
         if (sum != hwComputedSum) {
             fprintf(stderr, "Accelerator is not computing euclidean distance correctly.\n");
             LOG_ABORT("should not be reached");
@@ -347,7 +337,8 @@ verifyPopulationCount(const IAccelerated & accel)
     constexpr size_t expected = 32 + 0 + 1 + 48 + 32 + 1 + 64;
     size_t hwComputedPopulationCount = accel.populationCount(words, VESPA_NELEMS(words));
     if (hwComputedPopulationCount != expected) {
-        fprintf(stderr, "Accelerator is not computing populationCount correctly.Expected %zu, computed %zu\n", expected, hwComputedPopulationCount);
+        fprintf(stderr, "Accelerator is not computing populationCount correctly.Expected %zu, computed %zu\n",
+                expected, hwComputedPopulationCount);
         LOG_ABORT("should not be reached");
     }
 }
@@ -472,10 +463,10 @@ private:
     static void verify(const IAccelerated & accelerated) {
         verifyDotproduct<float>(accelerated);
         verifyDotproduct<double>(accelerated);
-        verifyDotproduct<int8_t>(accelerated);
-        verifyDotproduct<int32_t>(accelerated);
+        verifyDotproduct<int8_t, int64_t>(accelerated);
+        verifyDotproduct<int32_t, int64_t>(accelerated);
         verifyDotproduct<int64_t>(accelerated);
-        verifyEuclideanDistance<int8_t>(accelerated);
+        verifyEuclideanDistance<int8_t, int64_t>(accelerated);
         verifyEuclideanDistance<float>(accelerated);
         verifyEuclideanDistance<double>(accelerated);
         verifyPopulationCount(accelerated);
@@ -486,14 +477,23 @@ private:
 
 RuntimeVerificator::RuntimeVerificator()
 {
-    verify(*IAccelerated::create_platform_baseline_accelerator());
-    verify(*create_accelerator());
+    verify(*IAccelerated::create_baseline_auto_vectorized_target());
+    verify(*IAccelerated::create_best_accelerator_impl_and_target());
+}
+
+// Simple wrapper to debug log created impl+target once during process startup.
+IAccelerated::UP create_and_log_best_accelerator() {
+    auto accel = IAccelerated::create_best_accelerator_impl_and_target();
+    LOG(debug, "Created accelerator of type %s for runtime target %s",
+        accel->implementation_name(), accel->target_name());
+    return accel;
 }
 
 } // anon ns
 
-IAccelerated::UP IAccelerated::create_platform_baseline_accelerator() {
-    // Important: must never recurse into create_accelerator(), as it defers to this function as a fallback.
+IAccelerated::UP IAccelerated::create_baseline_auto_vectorized_target() {
+    // Important: must never recurse into create_best_auto_vectorized_target(),
+    // as it defers to this function as a fallback.
 #ifdef __x86_64__
     return std::make_unique<X64GenericAccelerator>();
 #else
@@ -501,11 +501,46 @@ IAccelerated::UP IAccelerated::create_platform_baseline_accelerator() {
 #endif
 }
 
+IAccelerated::UP IAccelerated::create_best_auto_vectorized_target() {
+    const auto target_level = enabled_target_level();
+#ifdef __x86_64__
+    if (target_level.is_enabled(target::AVX3_DL)) {
+        return std::make_unique<Avx3DlAccelerator>();
+    }
+    if (target_level.is_enabled(target::AVX3)) {
+        return std::make_unique<Avx3Accelerator>();
+    }
+    if (target_level.is_enabled(target::AVX2)) {
+        return std::make_unique<Avx2Accelerator>();
+    }
+#else // aarch64
+    if (target_level.is_enabled(target::SVE2)) {
+        return std::make_unique<Sve2Accelerator>();
+    }
+    if (target_level.is_enabled(target::SVE)) {
+        return std::make_unique<SveAccelerator>();
+    }
+    if (target_level.is_enabled(target::NEON_FP16_DOTPROD)) {
+        return std::make_unique<NeonFp16DotprodAccelerator>();
+    }
+#endif
+    return create_baseline_auto_vectorized_target();
+}
+
+std::unique_ptr<IAccelerated> IAccelerated::create_best_accelerator_impl_and_target() {
+    const auto target_level = enabled_target_level();
+    if (target_level.is_enabled(target::HIGHWAY)) {
+        return Highway::create_best_target();
+    }
+    return create_best_auto_vectorized_target();
+}
+
+
 const IAccelerated &
 IAccelerated::getAccelerator()
 {
     static RuntimeVerificator verifyAccelerator_once;
-    static IAccelerated::UP accelerator = create_accelerator();
+    static auto accelerator = create_and_log_best_accelerator();
     return *accelerator;
 }
 

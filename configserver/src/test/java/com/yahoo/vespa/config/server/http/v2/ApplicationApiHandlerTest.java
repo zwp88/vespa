@@ -15,7 +15,6 @@ import com.yahoo.slime.SlimeUtils;
 import com.yahoo.test.ManualClock;
 import com.yahoo.vespa.config.server.ApplicationRepository;
 import com.yahoo.vespa.config.server.MockProvisioner;
-import com.yahoo.vespa.config.server.application.OrchestratorMock;
 import com.yahoo.vespa.config.server.provision.HostProvisionerProvider;
 import com.yahoo.vespa.config.server.tenant.TenantRepository;
 import com.yahoo.vespa.config.server.tenant.TestTenantRepository;
@@ -43,7 +42,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * @author jonmv
+ * @author Jon Marius Venstad
  */
 class ApplicationApiHandlerTest {
 
@@ -104,7 +103,6 @@ class ApplicationApiHandlerTest {
         tenantRepository.addTenant(tenant);
         applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
-                .withOrchestrator(new OrchestratorMock())
                 .withClock(clock)
                 .withConfigserverConfig(configserverConfig)
                 .build();
@@ -183,7 +181,7 @@ class ApplicationApiHandlerTest {
                        """
                        {
                          "error-code": "BAD_REQUEST",
-                         "message": "Error preprocessing application package for test.default, session 2: services.xml does not exist in application package. There are 1 files in the directory"
+                         "message": "Error preprocessing application package for test.default, session id 2 (based on session id unknown): services.xml does not exist in application package. There are 1 files in the directory"
                        }
                        """);
     }

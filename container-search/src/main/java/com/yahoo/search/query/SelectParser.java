@@ -91,6 +91,7 @@ import static com.yahoo.search.yql.YqlParser.DOT_PRODUCT;
 import static com.yahoo.search.yql.YqlParser.EQUIV;
 import static com.yahoo.search.yql.YqlParser.FILTER;
 import static com.yahoo.search.yql.YqlParser.FUZZY;
+import static com.yahoo.search.yql.YqlParser.GEO_BOUNDING_BOX;
 import static com.yahoo.search.yql.YqlParser.GEO_LOCATION;
 import static com.yahoo.search.yql.YqlParser.HIT_LIMIT;
 import static com.yahoo.search.yql.YqlParser.HNSW_EXPLORE_ADDITIONAL_HITS;
@@ -153,7 +154,7 @@ public class SelectParser implements Parser {
     private final Normalizer normalizer;
     private IndexFacts.Session indexFactsSession;
 
-    private static final List<String> FUNCTION_CALLS = List.of(WAND, WEIGHTED_SET, DOT_PRODUCT, GEO_LOCATION, NEAREST_NEIGHBOR, PREDICATE, RANK, WEAK_AND);
+    private static final List<String> FUNCTION_CALLS = List.of(WAND, WEIGHTED_SET, DOT_PRODUCT, GEO_BOUNDING_BOX, GEO_LOCATION, NEAREST_NEIGHBOR, PREDICATE, RANK, WEAK_AND);
 
     public SelectParser(ParserEnvironment environment) {
         indexFacts = environment.getIndexFacts();
@@ -271,6 +272,7 @@ public class SelectParser implements Parser {
             case WAND -> buildWand(key, value);
             case WEIGHTED_SET -> buildWeightedSet(key, value);
             case DOT_PRODUCT -> buildDotProduct(key, value);
+            case GEO_BOUNDING_BOX -> buildGeoBoundingBox(key, value);
             case GEO_LOCATION -> buildGeoLocation(key, value);
             case NEAREST_NEIGHBOR -> buildNearestNeighbor(key, value);
             case PREDICATE -> buildPredicate(key, value);
@@ -406,6 +408,19 @@ public class SelectParser implements Parser {
         return orItem;
     }
 
+    private Item buildGeoBoundingBox(String key, Inspector value) {
+        String field = value.entry(0).asString();
+        var coord_1 = value.entry(1).asDouble();
+        var coord_2 = value.entry(2).asDouble();
+        var coord_3 = value.entry(3).asDouble();
+        var coord_4 = value.entry(4).asDouble();
+        var swCorner = new Location.Point(coord_1, coord_2);
+        var neCorner = new Location.Point(coord_3, coord_4);
+        var loc = Location.fromBoundingBox(swCorner, neCorner);
+        var item = new GeoLocationItem(loc, field);
+        return item;
+    }
+
     private Item buildGeoLocation(String key, Inspector value) {
         HashMap<Integer, Inspector> children = childMap(value);
         Preconditions.checkArgument(children.size() == 4, "Expected 4 arguments, got %s.", children.size());
@@ -413,28 +428,29 @@ public class SelectParser implements Parser {
         var arg1 = children.get(1);
         var arg2 = children.get(2);
         var arg3 = children.get(3);
-        var loc = new Location();
         if (arg3.type() != Type.STRING) {
            throw new IllegalArgumentException("Invalid geoLocation radius type "+arg3.type()+" for "+arg3);
         }
         double radius = DistanceParser.parse(arg3.asString());
+        Location.Point center;
         if (arg1.type() == Type.STRING && arg2.type() == Type.STRING) {
             var c1input = children.get(1).asString();
             var c2input = children.get(2).asString();
             var coord_1 = ParsedDegree.fromString(c1input, true, false);
             var coord_2 = ParsedDegree.fromString(c2input, false, true);
             if (coord_1.isLatitude && coord_2.isLongitude) {
-                loc.setGeoCircle(coord_1.degrees, coord_2.degrees, radius);
+                center = new Location.Point(coord_1.degrees, coord_2.degrees);
             } else if (coord_2.isLatitude && coord_1.isLongitude) {
-                loc.setGeoCircle(coord_2.degrees, coord_1.degrees, radius);
+                center = new Location.Point(coord_2.degrees, coord_1.degrees);
             } else {
                 throw new IllegalArgumentException("Invalid geoLocation coordinates '"+c1input+"' and '"+c2input+"'");
             }
         } else if (arg1.type() == Type.DOUBLE && arg2.type() == Type.DOUBLE) {
-            loc.setGeoCircle(arg1.asDouble(), arg2.asDouble(), radius);
+            center = new Location.Point(arg1.asDouble(), arg2.asDouble());
         } else {
             throw new IllegalArgumentException("Invalid geoLocation coordinate types "+arg1.type()+" and "+arg2.type());
         }
+        var loc = Location.fromGeoCircle(center, radius);
         var item = new GeoLocationItem(loc, field);
         Inspector annotations = getAnnotations(value);
         if (annotations != null){
@@ -468,7 +484,7 @@ public class SelectParser implements Parser {
                 }
                 if (HNSW_EXPLORE_ADDITIONAL_HITS.equals(annotation_name)) {
                     int hnswExploreAdditionalHits = (int)(annotation_value.asDouble());
-                    item.setHnswExploreAdditionalHits(hnswExploreAdditionalHits);                    
+                    item.setHnswExploreAdditionalHits(hnswExploreAdditionalHits);
                 }
                 if (APPROXIMATE.equals(annotation_name)) {
                     boolean allowApproximate = annotation_value.asBool();
@@ -943,18 +959,19 @@ public class SelectParser implements Parser {
         };
     }
 
-    private Item instantiateWordItem(String field, String key, Inspector value) {
-        var children = childMap(value);
+    private Item instantiateWordItem(String field, String key, Inspector node) {
+        var children = childMap(node);
         if (children.size() < 2)
             throw new IllegalArgumentException("Expected at least 2 children of '" + key + "', but got " + children.size());
 
         String wordData = children.get(1).asString();
-        return instantiateWordItem(field, wordData, key, value, false, decideParsingLanguage(value, wordData));
+        return instantiateWordItem(field, wordData, node, false);
     }
 
-    private Item instantiateWordItem(String field, String rawWord, String key, Inspector value, boolean exactMatch, Language language) {
+    private Item instantiateWordItem(String field, String rawWord, Inspector node, boolean exactMatch) {
         String wordData = rawWord;
-        HashMap<String, Inspector> annotations = getAnnotationMap(value);
+        Language language = decideParsingLanguage(node, wordData);
+        HashMap<String, Inspector> annotations = getAnnotationMap(node);
 
         if (getBoolAnnotation(NFKC, annotations, Boolean.FALSE)) {
             // NOTE: If this is set to FALSE (default), we will still NFKC normalize text data
@@ -983,11 +1000,11 @@ public class SelectParser implements Parser {
             wordItem = new WordItem(wordData, fromQuery);
         }
 
-        prepareWord(field, value, wordItem);
+        prepareWord(field, node, wordItem);
         if (language != Language.ENGLISH)
             wordItem.setLanguage(language);
 
-        return leafStyleSettings(getAnnotations(value), wordItem);
+        return leafStyleSettings(getAnnotations(node), wordItem);
     }
 
     private Language decideParsingLanguage(Inspector value, String wordData) {
@@ -1094,7 +1111,7 @@ public class SelectParser implements Parser {
 
         for (Inspector word :  children.values()) {
             if (word.type() == STRING)
-                phrase.addItem(new WordItem(word.asString()));
+                phrase.addItem(instantiateWordItem(field, word.asString(), word, false));
             else if (word.type() == OBJECT && word.field(PHRASE).valid())
                 phrase.addItem(instantiatePhraseItem(field, key, getChildren(word)));
         }

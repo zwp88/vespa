@@ -610,7 +610,7 @@ public:
                                              uint32_t lastDocId,
                                              const search::fef::TermFieldMatchDataArray &matchData);
 
-    ~FakeFilterOccEGCompressed64ArrayIterator();
+    ~FakeFilterOccEGCompressed64ArrayIterator() override;
 
     void doUnpack(uint32_t docId) override;
     void doSeek(uint32_t docId) override;
@@ -735,7 +735,7 @@ class FakeEGCompr64LEFilterOcc : public FakeEGCompr64FilterOcc
 public:
     FakeEGCompr64LEFilterOcc(const FakeWord &fw);
 
-    ~FakeEGCompr64LEFilterOcc();
+    ~FakeEGCompr64LEFilterOcc() override;
 };
 
 
@@ -758,7 +758,7 @@ class FakeEGCompr64SkipFilterOcc : public FakeEGCompr64FilterOcc
 {
 public:
     FakeEGCompr64SkipFilterOcc(const FakeWord &fw);
-    ~FakeEGCompr64SkipFilterOcc();
+    ~FakeEGCompr64SkipFilterOcc() override;
     std::unique_ptr<search::queryeval::SearchIterator> createIterator(const fef::TermFieldMatchDataArray &matchData) const override;
 };
 
@@ -843,8 +843,7 @@ public:
             const std::string &name,
             const fef::TermFieldMatchDataArray &matchData);
 
-    ~FakeFilterOccEGCompressed64SkipArrayIterator();
-
+    ~FakeFilterOccEGCompressed64SkipArrayIterator() override;
 
     void doL4SkipSeek(uint32_t docid);
     void doL3SkipSeek(uint32_t docid); 

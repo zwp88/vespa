@@ -86,7 +86,6 @@ public final class ApplicationContainerCluster extends ContainerCluster<Applicat
     private static final TenantName HOSTED_VESPA = TenantName.from("hosted-vespa");
 
     public static final int defaultHeapSizePercentageOfAvailableMemory = 85;
-    public static final int heapSizePercentageOfTotalAvailableMemoryWhenCombinedCluster = 24;
 
     private final Set<FileReference> applicationBundles = new LinkedHashSet<>();
 
@@ -105,6 +104,7 @@ public final class ApplicationContainerCluster extends ContainerCluster<Applicat
     private final int transport_events_before_wakeup;
     private final int transport_connections_per_target;
     private final int documentV1QueueSize;
+    private final int maxDocumentOperationRequestSizeMib;
 
     /** The heap size % of total memory available to the JVM process. */
     private final int heapSizePercentageOfAvailableMemory;
@@ -153,6 +153,7 @@ public final class ApplicationContainerCluster extends ContainerCluster<Applicat
                 deployState.getApplicationPackage(), deployState.getProperties().applicationId(), ClusterSpec.Id.from(clusterId));
         logger = deployState.getDeployLogger();
         documentV1QueueSize = deployState.featureFlags().documentV1QueueSize();
+        maxDocumentOperationRequestSizeMib = deployState.featureFlags().maxDocumentOperationRequestSizeMib();
     }
 
     public UserConfiguredUrls userConfiguredUrls() { return userConfiguredUrls; }
@@ -205,7 +206,7 @@ public final class ApplicationContainerCluster extends ContainerCluster<Applicat
             addPlatformBundle(PlatformBundles.absoluteBundlePath("vespa-testrunner-components"));
             addPlatformBundle(PlatformBundles.absoluteBundlePath("vespa-osgi-testrunner"));
             addPlatformBundle(PlatformBundles.absoluteBundlePath("tenant-cd-api"));
-            if(deployState.zone().system().isPublic()) {
+            if(deployState.zone().system().isPublicLike()) {
                 addPlatformBundle(PlatformBundles.absoluteBundlePath("cloud-tenant-cd"));
             }
         }
@@ -242,11 +243,7 @@ public final class ApplicationContainerCluster extends ContainerCluster<Applicat
         return Optional.empty();
     }
 
-    public int heapSizePercentageOfAvailable() {
-        return getHostClusterId().isPresent() ?
-                heapSizePercentageOfTotalAvailableMemoryWhenCombinedCluster :
-                heapSizePercentageOfAvailableMemory;
-    }
+    public int heapSizePercentageOfAvailable() { return heapSizePercentageOfAvailableMemory; }
 
     /** Create list of endpoints, these will be consumed later by LbServicesProducer */
     private void createEndpoints(DeployState deployState) {
@@ -428,7 +425,8 @@ public final class ApplicationContainerCluster extends ContainerCluster<Applicat
 
     /** Returns whether the deployment in given deploy state should have endpoints */
     private static boolean configureEndpoints(DeployState deployState) {
-        if (!deployState.isHosted()) return false;
+        // TODO(bjorncs|onurkaracali|morioramdenbourg, 2025-08-27) handle endpoints for K8s
+        if (!deployState.isHosted() || deployState.zone().system().isKubernetes()) return false;
         if (deployState.getProperties().applicationId().instance().isTester()) return false;
         if (deployState.getProperties().applicationId().tenant().equals(HOSTED_VESPA)) return false;
         return true;
@@ -439,6 +437,8 @@ public final class ApplicationContainerCluster extends ContainerCluster<Applicat
         if (documentV1QueueSize >= 0) {
             builder.maxThrottled(documentV1QueueSize);
         }
+        
+        builder.maxDocumentOperationRequestSizeMib(maxDocumentOperationRequestSizeMib);
     }
 
     public static class MbusParams {

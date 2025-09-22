@@ -1,8 +1,6 @@
 // Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 package com.yahoo.docprocs.indexing;
 
-import java.util.ArrayList;
-import java.util.List;
 import com.yahoo.component.annotation.Inject;
 import com.yahoo.component.chain.dependencies.After;
 import com.yahoo.component.chain.dependencies.Before;
@@ -29,7 +27,10 @@ import com.yahoo.language.provider.DefaultGeneratorProvider;
 import com.yahoo.vespa.configdefinition.IlscriptsConfig;
 import com.yahoo.vespa.indexinglanguage.FieldValuesFactory;
 import com.yahoo.vespa.indexinglanguage.expressions.Expression;
+import com.yahoo.vespa.indexinglanguage.expressions.InvalidInputException;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -89,17 +90,24 @@ public class IndexingProcessor extends DocumentProcessor {
         if (proc.getDocumentOperations().isEmpty()) return Progress.DONE;
 
         List<DocumentOperation> out = new ArrayList<>(proc.getDocumentOperations().size());
-        for (DocumentOperation documentOperation : proc.getDocumentOperations()) {
-            if (documentOperation instanceof DocumentPut) {
-                processDocument((DocumentPut)documentOperation, out);
-            } else if (documentOperation instanceof DocumentUpdate) {
-                processUpdate((DocumentUpdate)documentOperation, out);
-            } else if (documentOperation instanceof DocumentRemove) {
-                processRemove((DocumentRemove)documentOperation, out);
-            } else if (documentOperation != null) {
-                throw new IllegalArgumentException("Document class " + documentOperation.getClass().getName() + " not supported.");
-            } else {
-                throw new IllegalArgumentException("Expected document, got null.");
+        for (var op : proc.getDocumentOperations()) {
+            try {
+                if (op instanceof DocumentPut dp) {
+                    processDocument(dp, out);
+                } else if (op instanceof DocumentUpdate du) {
+                    processUpdate(du, out);
+                } else if (op instanceof DocumentRemove dr) {
+                    processRemove(dr, out);
+                } else if (op != null) {
+                    throw new IllegalArgumentException("Document class " + op.getClass().getName() + " not supported.");
+                } else {
+                    throw new IllegalArgumentException("Expected document, got null.");
+                }
+            } catch (InvalidInputException e) {
+                return Progress.INVALID_INPUT.withReason(
+                        op.getId() != null
+                                ? "Operation on '%s' contains invalid input: %s".formatted(op.getId().toString(), e.getMessage())
+                                : "Operation contains invalid input: %s".formatted(e.getMessage()));
             }
         }
         proc.getDocumentOperations().clear();
@@ -130,7 +138,7 @@ public class IndexingProcessor extends DocumentProcessor {
             buffer.flip();
             inputDocument = documentTypeManager.createDocument(buffer);
         }
-        Document output = script.execute(fieldValuesFactory, inputDocument);
+        Document output = script.execute(fieldValuesFactory, inputDocument, isReindexingOperation(input));
         if (output == null) return;
 
         out.add(new DocumentPut(input, output));
@@ -160,6 +168,12 @@ public class IndexingProcessor extends DocumentProcessor {
             // Ideally, this should be handled by dependency injection, however for now this workaround is necessary.
         }
         return map;
+    }
+
+    private static boolean isReindexingOperation(DocumentPut op) {
+        // All reindexing operation will have a special expression value in the test and set condition.
+        // Below value must match the constant in storage/src/vespa/storage/common/reindexing_constants.cpp.
+        return op.getCondition().getSelection().startsWith("@@__vespa_internal_allow_through_bucket_lock");
     }
 
 }

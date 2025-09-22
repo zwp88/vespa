@@ -1,2 +1,2 @@
-- Added support for 'elementwise' rank feature.
-- Improved ranking expression analysis and diagnostics.
+- Support for multiple inheritance of match-features.
+- Fixed formatting bugs.

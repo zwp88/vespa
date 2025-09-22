@@ -18,6 +18,8 @@ SimpleONear::~SimpleONear() = default;
 
 SimpleOr::~SimpleOr() = default;
 
+SimpleWeakAnd::~SimpleWeakAnd() = default;
+
 SimpleEquiv::~SimpleEquiv() = default;
 
 SimplePhrase::~SimplePhrase() = default;
@@ -55,5 +57,7 @@ SimpleNearestNeighborTerm::~SimpleNearestNeighborTerm() = default;
 SimpleFuzzyTerm::~SimpleFuzzyTerm() = default;
 
 SimpleInTerm::~SimpleInTerm() = default;
+
+SimpleWordAlternatives::~SimpleWordAlternatives() = default;
 
 }

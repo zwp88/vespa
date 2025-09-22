@@ -14,7 +14,7 @@ namespace search::aggregation {
 namespace {
 
 bool isReady(const ResultNode *myRes, const ResultNode &ref) {
-    return (myRes != 0 && myRes->getClass().id() == ref.getClass().id());
+    return (myRes != nullptr && myRes->getClass().id() == ref.getClass().id());
 }
 
 template<typename Wanted, typename Fallback>
@@ -116,11 +116,10 @@ SumAggregationResult::onPrepare(const ResultNode & result, bool useForInit)
 }
 
 MinAggregationResult::MinAggregationResult() = default;
-MinAggregationResult::MinAggregationResult(const ResultNode::CP &result)
-    : AggregationResult()
-{
-    setResult(result);
-}
+MinAggregationResult::MinAggregationResult(const SingleResultNode & min)
+    : AggregationResult(),
+      _min(min)
+{ }
 MinAggregationResult::~MinAggregationResult() = default;
 
 void
@@ -161,10 +160,10 @@ MaxAggregationResult::onPrepare(const ResultNode & result, bool useForInit)
 void
 AverageAggregationResult::onPrepare(const ResultNode & result, bool useForInit)
 {
-    if (isReady(_sum.get(), result)) {
+    if (_sum.get()) {
         return;
     }
-    _sum = createAndEnsureWanted<NumericResultNode, FloatResultNode>(result);
+    _sum = std::make_unique<FloatResultNode>();
     if ( useForInit ) {
         _sum->set(result);
     }

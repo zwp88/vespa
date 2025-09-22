@@ -207,10 +207,10 @@ public class ModelContextImpl implements ModelContext {
         private final long zookeeperPreAllocSize;
         private final int documentV1QueueSize;
         private final int maxContentNodeMaintenanceOpConcurrency;
+        private final int maxDocumentOperationRequestSizeMib;
         private final int maxDistributorDocumentOperationSizeMib;
         private final Sidecars sidecarsForTest;
         private final boolean useTriton;
-        private final long searchCoreTransactionLogReplaySoftMemoryLimit;
         private final int searchCoreMaxOutstandingMoveOps;
         private final boolean useNewPrepareForRestart;
 
@@ -255,10 +255,10 @@ public class ModelContextImpl implements ModelContext {
             this.zookeeperPreAllocSize = Flags.ZOOKEEPER_PRE_ALLOC_SIZE_KIB.bindTo(source).value();
             this.documentV1QueueSize = Flags.DOCUMENT_V1_QUEUE_SIZE.bindTo(source).with(appId).with(version).value();
             this.maxContentNodeMaintenanceOpConcurrency = Flags.MAX_CONTENT_NODE_MAINTENANCE_OP_CONCURRENCY.bindTo(source).with(appId).with(version).value();
+            this.maxDocumentOperationRequestSizeMib = Flags.MAX_DOCUMENT_OPERATION_REQUEST_SIZE_MIB.bindTo(source).with(appId).with(version).value();
             this.maxDistributorDocumentOperationSizeMib = Flags.MAX_DISTRIBUTOR_DOCUMENT_OPERATION_SIZE_MIB.bindTo(source).with(appId).with(version).value();
             this.sidecarsForTest = Flags.SIDECARS_FOR_TEST.bindTo(source).with(appId).with(version).value();
             this.useTriton = Flags.USE_TRITON.bindTo(source).with(appId).with(version).value();
-            this.searchCoreTransactionLogReplaySoftMemoryLimit = Flags.SEARCH_CORE_TRANSACTION_LOG_REPLAY_SOFT_MEMORY_LIMIT.bindTo(source).with(appId).with(version).value();
             this.searchCoreMaxOutstandingMoveOps = Flags.SEARCH_CORE_MAX_OUTSTANDING_MOVE_OPS.bindTo(source).with(appId).with(version).value();
             this.useNewPrepareForRestart = Flags.USE_NEW_PREPARE_FOR_RESTART_METHOD.bindTo(source).with(appId).with(version).value();
         }
@@ -303,10 +303,10 @@ public class ModelContextImpl implements ModelContext {
         @Override public long zookeeperPreAllocSize() { return zookeeperPreAllocSize; }
         @Override public int documentV1QueueSize() { return documentV1QueueSize; }
         @Override public int maxContentNodeMaintenanceOpConcurrency() { return maxContentNodeMaintenanceOpConcurrency; }
+        @Override public int maxDocumentOperationRequestSizeMib() { return maxDocumentOperationRequestSizeMib; }
         @Override public int maxDistributorDocumentOperationSizeMib() { return maxDistributorDocumentOperationSizeMib; }
         @Override public Object sidecarsForTest() { return sidecarsForTest; }
         @Override public boolean useTriton() { return useTriton; }
-        @Override public long searchCoreTransactionLogReplaySoftMemoryLimit() { return searchCoreTransactionLogReplaySoftMemoryLimit; }
         @Override public boolean useNewPrepareForRestart() { return useNewPrepareForRestart; }
         @Override public int searchCoreMaxOutstandingMoveOps() { return searchCoreMaxOutstandingMoveOps; }
     }
@@ -342,6 +342,7 @@ public class ModelContextImpl implements ModelContext {
         private final Duration endpointConnectionTtl;
         private final List<String> requestPrefixForLoggingContent;
         private final List<String> jdiscHttpComplianceViolations;
+        private final StringFlag mallocImplFlag;
 
         public Properties(ApplicationId applicationId,
                           Version modelVersion,
@@ -393,6 +394,10 @@ public class ModelContextImpl implements ModelContext {
             this.requestPrefixForLoggingContent = PermanentFlags.LOG_REQUEST_CONTENT.bindTo(flagSource).with(applicationId).value();
             this.jdiscHttpComplianceViolations = PermanentFlags.JDISC_HTTP_COMPLIANCE_VIOLATIONS.bindTo(flagSource)
                     .with(applicationId).with(modelVersion).value();
+            this.mallocImplFlag = Flags.VESPA_USE_MALLOC_IMPL.bindTo(flagSource)
+                    .with(Dimension.INSTANCE_ID, applicationId.serializedForm())
+                    .with(Dimension.APPLICATION, applicationId.toSerializedFormWithoutInstance())
+                    .withVersion(Optional.of(modelVersion));
         }
 
         @Override public ModelContext.FeatureFlags featureFlags() { return featureFlags; }
@@ -458,6 +463,10 @@ public class ModelContextImpl implements ModelContext {
 
         @Override public String jvmGCOptions(Optional<ClusterSpec.Type> clusterType, Optional<ClusterSpec.Id> clusterId) {
             return flagValueForClusterTypeAndClusterId(jvmGCOptionsFlag, clusterType, clusterId);
+        }
+
+        @Override public String mallocImpl(Optional<ClusterSpec.Type> clusterType) {
+            return flagValueForClusterTypeAndClusterId(mallocImplFlag, clusterType, Optional.empty());
         }
 
         @Override public int searchNodeInitializerThreads(String clusterId) {

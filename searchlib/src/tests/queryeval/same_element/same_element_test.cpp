@@ -6,12 +6,10 @@
 #include <vespa/searchlib/queryeval/same_element_blueprint.h>
 #include <vespa/searchlib/queryeval/same_element_search.h>
 #include <vespa/searchcommon/attribute/i_search_context.h>
-#include <vespa/searchlib/attribute/searchcontextelementiterator.h>
 #include <vespa/vespalib/gtest/gtest.h>
 
 using namespace search::fef;
 using namespace search::queryeval;
-using search::attribute::SearchContextElementIterator;
 
 void verify_elements(SameElementSearch &se, uint32_t docid, const std::initializer_list<uint32_t> list) {
     SCOPED_TRACE("verify elements, docid=" + std::to_string(docid));
@@ -33,19 +31,26 @@ MatchData::UP make_match_data() {
 }
 
 std::unique_ptr<SameElementBlueprint> make_blueprint(const std::vector<FakeResult> &children, bool fake_attr = false) {
-    auto result = std::make_unique<SameElementBlueprint>(make_field_spec(), false);
+    MatchDataLayout subtree_mdl;
+    std::vector<std::unique_ptr<Blueprint>> bp_children;
+    bp_children.reserve(children.size());
     for (size_t i = 0; i < children.size(); ++i) {
         uint32_t field_id = i;
         std::string field_name = vespalib::make_string("f%u", field_id);
-        FieldSpec field = result->getNextChildField(field_name, field_id);
+        FieldSpec field(field_name, field_id, subtree_mdl.allocTermField(field_id), false);
         auto fake = std::make_unique<FakeBlueprint>(field, children[i]);
         fake->is_attr(fake_attr);
-        result->addTerm(std::move(fake));
+        bp_children.emplace_back(std::move(fake));
+    }
+    auto result = std::make_unique<SameElementBlueprint>(make_field_spec(), std::move(subtree_mdl), false);
+    for (auto& fake : bp_children) {
+        result->addChild(std::move(fake));
     }
     return result;
 }
 
 Blueprint::UP finalize(Blueprint::UP bp, bool strict) {
+    bp->setDocIdLimit(1000);
     Blueprint::UP result = Blueprint::optimize_and_sort(std::move(bp), strict);
     result->fetchPostings(ExecuteInfo::FULL);
     result->freeze();
@@ -136,22 +141,9 @@ TEST(SameElementTest, require_that_children_are_sorted) {
     auto b = make_result({{5, {0}}, {5, {0}}});
     auto c = make_result({{5, {0}}, {5, {0}}, {5, {0}}, {5, {0}}});
     auto bp = finalize(make_blueprint({a,b,c}), true);
-    EXPECT_EQ(dynamic_cast<SameElementBlueprint&>(*bp).terms()[0]->getState().estimate().estHits, 2u);
-    EXPECT_EQ(dynamic_cast<SameElementBlueprint&>(*bp).terms()[1]->getState().estimate().estHits, 3u);
-    EXPECT_EQ(dynamic_cast<SameElementBlueprint&>(*bp).terms()[2]->getState().estimate().estHits, 4u);
-}
-
-TEST(SameElementTest, require_that_attribute_iterators_are_wrapped_for_element_unpacking) {
-    auto a = make_result({{5, {1,3,7}}});
-    auto b = make_result({{5, {3,5,10}}});
-    auto bp = finalize(make_blueprint({a,b}, true), false);
-    auto md = make_match_data();
-    auto search = bp->createSearch(*md);
-    auto *se = dynamic_cast<SameElementSearch*>(search.get());
-    ASSERT_TRUE(se != nullptr);
-    ASSERT_EQ(se->children().size(), 2u);
-    EXPECT_TRUE(dynamic_cast<SearchContextElementIterator*>(se->children()[0].get()) != nullptr);
-    EXPECT_TRUE(dynamic_cast<SearchContextElementIterator*>(se->children()[1].get()) != nullptr);
+    EXPECT_EQ(dynamic_cast<SameElementBlueprint&>(*bp).getChild(0).getState().estimate().estHits, 2u);
+    EXPECT_EQ(dynamic_cast<SameElementBlueprint&>(*bp).getChild(1).getState().estimate().estHits, 3u);
+    EXPECT_EQ(dynamic_cast<SameElementBlueprint&>(*bp).getChild(2).getState().estimate().estHits, 4u);
 }
 
 GTEST_MAIN_RUN_ALL_TESTS()

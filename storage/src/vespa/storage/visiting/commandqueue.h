@@ -9,18 +9,14 @@
 
 #pragma once
 
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/identity.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-#include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
 #include <vespa/vespalib/util/printable.h>
 #include <vespa/vespalib/util/time.h>
 #include <vespa/storageframework/generic/clock/clock.h>
 #include <atomic>
 #include <vector>
 #include <ostream>
+#include <set>
+#include <cassert>
 
 namespace storage {
 
@@ -40,10 +36,10 @@ public:
                      vespalib::steady_time deadline,
                      uint64_t sequenceId,
                      PriorityType priority)
-            : _command(cmd),
-              _deadline(deadline),
-              _sequenceId(sequenceId),
-              _priority(priority)
+          : _command(cmd),
+            _deadline(deadline),
+            _sequenceId(sequenceId),
+            _priority(priority)
         {}
 
         // Sort on both priority and sequence ID
@@ -55,31 +51,74 @@ public:
         }
     };
 
+    // wraps an iterator for std::set<CommandEntry *>, hiding the indirection
+    template<typename I> struct wrap_set_iterator : public I {
+        auto * operator-> () const { return I::operator*(); }
+        auto & operator* () const { return *I::operator*(); }
+    };
 private:
-    using CommandList = boost::multi_index::multi_index_container<
-                CommandEntry,
-                boost::multi_index::indexed_by<
-                    boost::multi_index::ordered_unique<
-                        boost::multi_index::identity<CommandEntry>
-                    >,
-                    boost::multi_index::ordered_non_unique<
-                        boost::multi_index::member<CommandEntry, vespalib::steady_time, &CommandEntry::_deadline>
-                    >
-                >
-            >;
-    using timelist = typename boost::multi_index::nth_index<CommandList, 1>::type;
+    // container of CommandEntry instances, primarily indexed
+    // on priority+sequenceId, with an extra index sorted
+    // on deadline+sequenceId.
+    struct CommandList {
+        using MainSet = std::set<CommandEntry>;
+        using EntryPtr = const CommandEntry *;
+        struct DeadlineCmp {
+            bool operator() (EntryPtr a, EntryPtr b) const {
+                vespalib::steady_time dla = a->_deadline;
+                vespalib::steady_time dlb = b->_deadline;
+                if (dla != dlb) {
+                    return dla < dlb;
+                } else {
+                    return (a->_sequenceId) < (b->_sequenceId);
+                }
+            }
+        };
+        using DeadlineSet = std::set<EntryPtr, DeadlineCmp>;
+        MainSet byPriAndSeqSet;
+        DeadlineSet byDeadlineSet;
+        void insert(CommandEntry toadd) {
+            auto [iter, added] = byPriAndSeqSet.emplace(std::move(toadd));
+            assert(added);
+            const CommandEntry &entry = *iter;
+            byDeadlineSet.insert(&entry);
+        }
+        void erase(MainSet::iterator iter) {
+            assert(iter != byPriAndSeqSet.end());
+            const CommandEntry &entry = *iter;
+            byDeadlineSet.erase(&entry);
+            byPriAndSeqSet.erase(iter);
+        }
+        void remove(const CommandEntry &key) {
+            auto iter = byPriAndSeqSet.find(key);
+            erase(iter);
+        }
+        void clear() {
+            for (auto it = byPriAndSeqSet.begin(); it != byPriAndSeqSet.end(); ) {
+                const auto& entry = *it;
+                byDeadlineSet.erase(&entry);
+                it = byPriAndSeqSet.erase(it);
+            }
+        }
+        ~CommandList();
+
+        auto rbegin()       {  return byPriAndSeqSet.rbegin(); }
+        auto rend()         {  return byPriAndSeqSet.rend(); }
+        auto rbegin() const {  return byPriAndSeqSet.rbegin(); }
+        auto rend()   const {  return byPriAndSeqSet.rend(); }
+    };
 
     const framework::Clock& _clock;
-    mutable CommandList     _commands;
+    CommandList             _commands;
     uint64_t                _sequenceId;
     std::atomic<size_t>     _cached_size;
 
 public:
-    using iterator = typename CommandList::iterator;
-    using reverse_iterator = typename CommandList::reverse_iterator;
-    using const_iterator = typename CommandList::const_iterator;
-    using const_reverse_iterator = typename CommandList::const_reverse_iterator;
-    using const_titerator = typename timelist::const_iterator;
+    using iterator               = CommandList::MainSet::iterator;
+    using const_iterator         = CommandList::MainSet::const_iterator;
+    using reverse_iterator       = CommandList::MainSet::reverse_iterator;
+    using const_reverse_iterator = CommandList::MainSet::const_reverse_iterator;
+    using const_titerator        = wrap_set_iterator<typename CommandList::DeadlineSet::const_iterator>;
 
     explicit CommandQueue(const framework::Clock& clock)
         : _clock(clock),
@@ -87,23 +126,20 @@ public:
           _cached_size(0)
     {}
 
-    iterator begin() { return _commands.begin(); }
-    iterator end() { return _commands.end(); }
-
-    const_iterator begin() const { return _commands.begin(); }
-    const_iterator end() const { return _commands.end(); }
+    iterator begin()             { return _commands.byPriAndSeqSet.begin(); }
+    iterator end()               { return _commands.byPriAndSeqSet.end(); }
+    const_iterator begin() const { return _commands.byPriAndSeqSet.begin(); }
+    const_iterator end()   const { return _commands.byPriAndSeqSet.end(); }
 
     const_titerator tbegin() const {
-        auto& tl = boost::multi_index::get<1>(_commands);
-        return tl.begin();
+        return wrap_set_iterator(_commands.byDeadlineSet.begin());
     }
     const_titerator tend() const {
-        auto& tl = boost::multi_index::get<1>(_commands);
-        return tl.end();
+        return wrap_set_iterator(_commands.byDeadlineSet.end());
     }
 
-    bool empty() const { return _commands.empty(); }
-    size_t size() const { return _commands.size(); }
+    bool empty() const { return _commands.byPriAndSeqSet.empty(); }
+    size_t size() const { return _commands.byPriAndSeqSet.size(); }
     size_t relaxed_atomic_size() const noexcept { return _cached_size.load(std::memory_order_relaxed); }
     std::pair<std::shared_ptr<Command>, vespalib::steady_time> releaseNextCommand();
     std::shared_ptr<Command> peekNextCommand() const;
@@ -121,18 +157,20 @@ public:
 
 private:
     void update_cached_size() noexcept {
-        _cached_size.store(_commands.size(), std::memory_order_relaxed);
+        _cached_size.store(size(), std::memory_order_relaxed);
     }
 };
 
+template<class Command>
+CommandQueue<Command>::CommandList::~CommandList() = default;
 
 template<class Command>
 std::pair<std::shared_ptr<Command>, vespalib::steady_time>
 CommandQueue<Command>::releaseNextCommand()
 {
     std::pair<std::shared_ptr<Command>, vespalib::steady_time> retVal;
-    if (!_commands.empty()) {
-        iterator first = _commands.begin();
+    if (!empty()) {
+        iterator first = begin();
         retVal.first = first->_command;
         retVal.second = first->_deadline;
         _commands.erase(first);
@@ -145,8 +183,8 @@ template<class Command>
 std::shared_ptr<Command>
 CommandQueue<Command>::peekNextCommand() const
 {
-    if (!_commands.empty()) {
-        const_iterator first = _commands.begin();
+    if (!empty()) {
+        const_iterator first = begin();
         return first->_command;
     } else {
         return std::shared_ptr<Command>();
@@ -168,10 +206,12 @@ CommandQueue<Command>::releaseTimedOut()
 {
     std::vector<CommandEntry> timed_out;
     auto now = _clock.getMonotonicTime();
-    while (!empty() && (tbegin()->_deadline <= now)) {
-        timed_out.emplace_back(*tbegin());
-        timelist& tl = boost::multi_index::get<1>(_commands);
-        tl.erase(tbegin());
+    while (!empty()) {
+        auto iter = tbegin();
+        if (iter->_deadline > now)
+            break;
+        timed_out.emplace_back(*iter);
+        _commands.remove(timed_out.back());
     }
     update_cached_size();
     return timed_out;
@@ -181,7 +221,8 @@ template <class Command>
 std::pair<std::shared_ptr<Command>, vespalib::steady_time>
 CommandQueue<Command>::releaseLowestPriorityCommand()
 {
-    if (!_commands.empty()) {
+    if (!empty()) {
+        // NOTE: works only for this special case:
         iterator last = (++_commands.rbegin()).base();
         auto deadline = last->_deadline;
         std::shared_ptr<Command> cmd(last->_command);
@@ -197,7 +238,7 @@ template <class Command>
 std::shared_ptr<Command>
 CommandQueue<Command>::peekLowestPriorityCommand() const
 {
-    if (!_commands.empty()) {
+    if (!empty()) {
         const_reverse_iterator last = _commands.rbegin();
         return last->_command;
     } else {

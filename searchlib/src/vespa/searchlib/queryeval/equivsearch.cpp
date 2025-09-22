@@ -26,6 +26,9 @@ public:
               fef::MatchData::UP inputMatchData,
               const fef::TermMatchDataMerger::Inputs &inputs,
               const fef::TermFieldMatchDataArray &outputs);
+    ~EquivImpl() override;
+    void get_element_ids(uint32_t docid, std::vector<uint32_t>& element_ids) override;
+    void and_element_ids_into(uint32_t docid, std::vector<uint32_t>& element_ids) override;
 };
 
 template<bool strict, typename Parent>
@@ -42,6 +45,9 @@ EquivImpl<strict, Parent>::EquivImpl(MultiSearch::Children children,
 }
 
 template<bool strict, typename Parent>
+EquivImpl<strict, Parent>::~EquivImpl() = default;
+
+template<bool strict, typename Parent>
 void
 EquivImpl<strict, Parent>::doUnpack(uint32_t docid)
 {
@@ -49,6 +55,22 @@ EquivImpl<strict, Parent>::doUnpack(uint32_t docid)
         MultiSearch::doUnpack(docid);
         _merger.merge(docid);
     }
+}
+
+template<bool strict, typename Parent>
+void
+EquivImpl<strict, Parent>::get_element_ids(uint32_t docid, std::vector<uint32_t>& element_ids)
+{
+    this->unpack(docid);
+    _merger.get_element_ids(docid, element_ids);
+}
+
+template<bool strict, typename Parent>
+void
+EquivImpl<strict, Parent>::and_element_ids_into(uint32_t docid, std::vector<uint32_t>& element_ids)
+{
+    this->unpack(docid);
+    _merger.and_element_ids_into(docid, element_ids);
 }
 
 SearchIterator::UP

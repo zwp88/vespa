@@ -142,7 +142,10 @@ public class BuiltInFunctions {
         ), Set.of(
             "", // empty not actually allowed, but here for completion
             "firstPosition", 
-            "occurences"
+            "lastPosition",
+            "occurrences",
+            "weight",
+            "exactness"
         ))));
 
         put("matchCount", new GenericFunction("mathCount", new FunctionSignature(new FieldArgument(FieldType.STRING, FieldArgument.IndexAttributeType))));
@@ -242,6 +245,7 @@ public class BuiltInFunctions {
         put("firstPhase", new GenericFunction("firstPhase"));
         put("secondPhase", new GenericFunction("secondPhase"));
         put("firstPhaseRank", new GenericFunction("firstPhaseRank"));
+        put("relevanceScore", new GenericFunction("relevanceScore"));
 
         put("nativeFieldMatch", new GenericFunction("nativeFieldMatch", List.of(
             new FunctionSignature(),

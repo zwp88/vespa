@@ -63,11 +63,6 @@ public class PhraseItem extends CompositeIndexedItem {
         return explicit;
     }
 
-    private IndexedItem convertIntToWord(Item orig) {
-        IntItem o = (IntItem) orig;
-        return new WordItem(o.stringValue(), o.getIndexName(), o.isFromQuery());
-    }
-
     /**
      * Adds subitem. The word will have its index name set to the index name of
      * this phrase. If the item is a word, it will simply be added, if the item
@@ -80,8 +75,8 @@ public class PhraseItem extends CompositeIndexedItem {
         if (item instanceof WordItem || item instanceof PhraseSegmentItem || item instanceof WordAlternativesItem) {
             addIndexedItem((IndexedItem) item);
         }
-        else if (item instanceof IntItem) {
-            addIndexedItem(convertIntToWord(item));
+        else if (item instanceof IntItem intItem) {
+            addIndexedItem(intItem.asWord());
         }
         else if (item instanceof PhraseItem || item instanceof AndSegmentItem) {
             for (Iterator<Item> i = ((CompositeItem) item).getItemIterator(); i.hasNext();)
@@ -105,11 +100,9 @@ public class PhraseItem extends CompositeIndexedItem {
     public void addItem(int index, Item item) {
         if (item instanceof WordItem || item instanceof PhraseSegmentItem) {
             addIndexedItem(index, (IndexedItem) item);
-        } else if (item instanceof IntItem) {
-            addIndexedItem(index, convertIntToWord(item));
-        } else if (item instanceof PhraseItem) {
-            PhraseItem phrase = (PhraseItem) item;
-
+        } else if (item instanceof IntItem intItem) {
+            addIndexedItem(index, intItem.asWord());
+        } else if (item instanceof PhraseItem phrase) {
             for (Iterator<Item> i = phrase.getItemIterator(); i.hasNext();) {
                 addIndexedItem(index++, (WordItem) i.next());
             }
@@ -122,8 +115,8 @@ public class PhraseItem extends CompositeIndexedItem {
     public Item setItem(int index, Item item) {
         if (item instanceof WordItem || item instanceof PhraseSegmentItem) {
             return setIndexedItem(index, (IndexedItem) item);
-        } else if (item instanceof IntItem) {
-            return setIndexedItem(index, convertIntToWord(item));
+        } else if (item instanceof IntItem intItem) {
+            return setIndexedItem(index, intItem.asWord());
         } else if (item instanceof PhraseItem phrase) {
             Iterator<Item> i = phrase.getItemIterator();
             // we assume we don't try to add empty phrases
@@ -189,10 +182,8 @@ public class PhraseItem extends CompositeIndexedItem {
     /**
      * Returns a subitem as a block item,
      *
-     * @param index
-     *            the (0-base) index of the item to return
-     * @throws IndexOutOfBoundsException
-     *             if there is no subitem at index
+     * @param index the (0-base) index of the item to return
+     * @throws IndexOutOfBoundsException if there is no subitem at index
      */
     public BlockItem getBlockItem(int index) {
         return (BlockItem) getItem(index);
@@ -211,11 +202,9 @@ public class PhraseItem extends CompositeIndexedItem {
         for (Iterator<Item> i = getItemIterator(); i.hasNext();) {
             Item subitem = i.next();
 
-            if (subitem instanceof PhraseSegmentItem) {
-                PhraseSegmentItem seg = (PhraseSegmentItem) subitem;
-
+            if (subitem instanceof PhraseSegmentItem segment) {
                 // "What encode does, minus what encodeThis does"
-                itemCount += seg.encodeContent(buffer);
+                itemCount += segment.encodeContent(buffer);
             } else {
                 itemCount += subitem.encode(buffer);
             }
@@ -241,14 +230,10 @@ public class PhraseItem extends CompositeIndexedItem {
         for (Iterator<Item> i = getItemIterator(); i.hasNext();) {
             Item item = i.next();
 
-            if (item instanceof WordItem) {
-                WordItem wordItem = (WordItem) item;
-
+            if (item instanceof WordItem wordItem) {
                 buffer.append(wordItem.getWord());
-            } else if (item instanceof PhraseSegmentItem) {
-                PhraseSegmentItem seg = (PhraseSegmentItem) item;
-
-                seg.appendContentsString(buffer);
+            } else if (item instanceof PhraseSegmentItem segment) {
+                segment.appendContentsString(buffer);
             } else {
                 buffer.append(item.toString());
             }

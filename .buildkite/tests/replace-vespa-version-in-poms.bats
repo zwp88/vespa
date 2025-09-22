@@ -25,6 +25,17 @@ teardown() {
   unset VESPA_VERSION
 }
 
+# Helper function to verify file content
+verify_file_content() {
+  local file="$1"
+  local expected="$2"
+  local actual_content
+  local expected_content
+  actual_content=$(cat "$file" | tr -d '[:space:]')
+  expected_content=$(echo "$expected" | tr -d '[:space:]')
+  assert_equal "$actual_content" "$expected_content"
+}
+
 @test "Replace Vespa version in pom.xml files" {
   local test_dir="$BATS_TEST_TMPDIR/test-replace-vespa-version"
 
@@ -80,17 +91,6 @@ EOF
   verify_file_content "$test_dir/pom.xml" "<project><vespaversion>1.0</vespaversion></project>"
 }
 
-# Helper function to verify file content
-verify_file_content() {
-  local file="$1"
-  local expected="$2"
-  local actual_content
-  local expected_content
-  actual_content=$(cat "$file" | tr -d '[:space:]')
-  expected_content=$(echo "$expected" | tr -d '[:space:]')
-  assert_equal "$actual_content" "$expected_content"
-}
-
 @test "No pom.xml files found" {
   local test_dir="$BATS_TEST_TMPDIR/test-no-pom-files"
 
@@ -100,7 +100,7 @@ verify_file_content() {
   run "$BATS_TEST_DIRNAME/../replace-vespa-version-in-poms.sh" "$VESPA_VERSION" "$test_dir"
 
   assert_success
-  assert_output "No pom.xml files found in $test_dir"
+  assert_output --partial "No pom.xml files found in $test_dir"
 }
 
 @test "No Vespa version provided" {
@@ -129,5 +129,5 @@ verify_file_content() {
   run "$BATS_TEST_DIRNAME/../replace-vespa-version-in-poms.sh" "$VESPA_VERSION" "$non_existent_dir"
 
   assert_failure
-  assert_output "Directory $non_existent_dir does not exist or is not a directory."
+  assert_output --partial "Directory $non_existent_dir does not exist or is not a directory."
 }

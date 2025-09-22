@@ -76,7 +76,7 @@ struct DP {
         bp->basic_plan(strict, 10);
         bp->fetchPostings(ExecuteInfo::FULL);
         SearchIterator::UP sb = bp->createSearch(*md);
-        EXPECT_TRUE(dynamic_cast<DotProductSearch*>(sb.get()) != 0);
+        EXPECT_TRUE(dynamic_cast<DotProductSearch*>(sb.get()) != nullptr);
         sb->initFullRange();
         FakeResult result;
         for (uint32_t docId = 1; docId < 10; ++docId) {
@@ -96,6 +96,7 @@ struct MockSearch : public SearchIterator {
     int seekCnt;
     uint32_t _initial;
     MockSearch(uint32_t initial) : SearchIterator(), seekCnt(0), _initial(initial) { }
+    ~MockSearch() override;
     void initRange(uint32_t begin, uint32_t end) override {
         SearchIterator::initRange(begin, end);
         setDocId(_initial);
@@ -107,6 +108,8 @@ struct MockSearch : public SearchIterator {
     void doUnpack(uint32_t) override {}
 };
 
+MockSearch::~MockSearch() = default;
+
 struct MockFixture {
     MockSearch *mock;
     TermFieldMatchData tfmd;
@@ -115,7 +118,7 @@ struct MockFixture {
             MockFixture(initial, {new EmptySearch()})
     { }
     ~MockFixture();
-    MockFixture(uint32_t initial, std::vector<SearchIterator *> children) : mock(0), tfmd(), search() {
+    MockFixture(uint32_t initial, std::vector<SearchIterator *> children) : mock(nullptr), tfmd(), search() {
         std::vector<TermFieldMatchData*> childMatch;
         std::vector<int32_t> weights;
         const size_t numChildren(children.size()+1);

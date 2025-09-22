@@ -40,6 +40,7 @@ import com.yahoo.search.query.SelectParser;
 import com.yahoo.search.query.parser.Parsable;
 import com.yahoo.search.query.parser.ParserEnvironment;
 import com.yahoo.search.yql.VespaGroupingStep;
+import com.yahoo.search.yql.VespaSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,6 +104,14 @@ public class SelectTestCase {
         arrayNode.add("default").add("foo");
         json.set("contains", arrayNode);
         assertParse(json.toString(), "default:foo");
+    }
+
+    @Test
+    void testStemmingPhrase() {
+        QueryTree parsed = parseWhere("{'contains': ['default', {'phrase': ['Registered', 'Nurse']}]}");
+        Query query = new Query();
+        query.getModel().getQueryTree().setRoot(parsed.getRoot());
+        assertEquals("default contains phrase(\"Registered\", \"Nurse\")", VespaSerializer.serialize(query));
     }
 
     @Test
@@ -609,6 +618,12 @@ public class SelectTestCase {
                 "GEO_LOCATION home:(2,10433033,63418417,45066,0,1,0,1921876103)");
         assertParse("{ \"geoLocation\": [ \"workplace\", -12.0, -34.0, \"-77 deg\" ] }",
                 "GEO_LOCATION workplace:(2,-34000000,-12000000,-1,0,1,0,4201111954)");
+    }
+
+    @Test
+    void testGeoBoundingBox() {
+        assertParse("{ \"geoBoundingBox\": [ \"workplace\", -63.418, -10.433, 63.500, 10.500 ] }",
+                    "GEO_LOCATION workplace:[2,-10433000,-63418000,10500000,63500000]");
     }
 
     @Test

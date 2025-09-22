@@ -14,7 +14,6 @@ import com.yahoo.config.provision.DockerImage;
 import com.yahoo.config.provision.HostName;
 import com.yahoo.config.provision.NodeResources.Architecture;
 import com.yahoo.config.provision.SharedHosts;
-import com.yahoo.config.provision.Zone;
 
 import java.io.File;
 import java.lang.annotation.ElementType;
@@ -96,7 +95,7 @@ public interface ModelContext {
         @ModelFeatureFlag(owners = {"hmusum"}) default double resourceLimitDisk() { return 0.75; }
         @ModelFeatureFlag(owners = {"hmusum"}) default double resourceLimitMemory() { return 0.8; }
         @ModelFeatureFlag(owners = {"hmusum"}) default double resourceLimitLowWatermarkDifference() { return 0.01; }
-        @ModelFeatureFlag(owners = {"hmusum"}) default double resourceLimitAddressSpace() { return 0.89; }
+        @ModelFeatureFlag(owners = {"hmusum"}) default double resourceLimitAddressSpace() { return 0.80; }
         @ModelFeatureFlag(owners = {"arnej"}) default boolean forwardIssuesAsErrors() { return true; }
         @ModelFeatureFlag(owners = {"arnej"}) default boolean useV8GeoPositions() { return false; }
         @ModelFeatureFlag(owners = {"arnej", "andreer"}) default List<String> ignoredHttpUserAgents() { return List.of(); }
@@ -114,13 +113,14 @@ public interface ModelContext {
         @ModelFeatureFlag(owners = {"hmusum"}) default long zookeeperPreAllocSize() { return 65536L; }
         @ModelFeatureFlag(owners = {"bjorncs"}) default int documentV1QueueSize() { return -1; /* use default from config def */ }
         @ModelFeatureFlag(owners = {"vekterli"}) default int maxContentNodeMaintenanceOpConcurrency() { return -1; }
+        @ModelFeatureFlag(owners = {"glebashnik"}) default int maxDocumentOperationRequestSizeMib() { return 2048; }
         @ModelFeatureFlag(owners = {"vekterli"}) default int maxDistributorDocumentOperationSizeMib() { return 128; }
         @ModelFeatureFlag(owners = {"glebashnik"}) default Object sidecarsForTest() { return null; }
         @ModelFeatureFlag(owners = {"bjorncs"}) default boolean useTriton() { return false; }
-        @ModelFeatureFlag(owners = {"vekterli"}) default long searchCoreTransactionLogReplaySoftMemoryLimit() { return -3; }
         @ModelFeatureFlag(owners = {"hmusum"}) default boolean useNewPrepareForRestart() { return false; }
         @ModelFeatureFlag(owners = {"hmusum"}) default int searchNodeInitializerThreads() { return 0; }
         @ModelFeatureFlag(owners = {"hmusum"}) default int searchCoreMaxOutstandingMoveOps() { return 100; }
+        @ModelFeatureFlag(owners = {"hmusum", "johsol"}, removeAfter = "8.584.3") default String useMallocImpl() { return ""; }
     }
 
     /** Warning: As elsewhere in this package, do not make backwards incompatible changes that will break old config models! */
@@ -135,7 +135,6 @@ public interface ModelContext {
         AthenzDomain tenantSecretDomain();
         String athenzDnsSuffix();
         boolean hostedVespa();
-        default Zone zone() { return Zone.defaultZone(); }
         Set<ContainerEndpoint> endpoints();
         boolean isBootstrap();
         boolean isFirstTimeDeployment();
@@ -150,17 +149,19 @@ public interface ModelContext {
 
         default List<TenantSecretStore> tenantSecretStores() { return List.of(); }
 
-        // Default setting for the gc-options attribute if not specified explicit by application
+        // Default setting for the gc-options attribute if not specified explicitly by application
         default String jvmGCOptions() { return jvmGCOptions(Optional.empty()); }
 
-        // Default setting for the gc-options attribute if not specified explicit by application
+        // Default setting for the gc-options attribute if not specified explicitly by application
         default String jvmGCOptions(Optional<ClusterSpec.Type> clusterType) {
             return jvmGCOptions(clusterType, Optional.empty());
         }
 
-        // Default setting for the gc-options attribute if not specified explicit by application
+        // Default setting for the gc-options attribute if not specified explicitly by application
         String jvmGCOptions(Optional<ClusterSpec.Type> clusterType, Optional<ClusterSpec.Id> clusterId);
-        
+
+        default String mallocImpl(Optional<ClusterSpec.Type> clusterType) { return ""; }
+
         default int searchNodeInitializerThreads(String clusterId) { return 0; }
         
         // Note: Used in unit tests (set to false in TestProperties) to avoid needing to deal with implicitly created node for logserver

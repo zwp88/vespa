@@ -16,12 +16,16 @@ public:
     SourceBlenderSearchNonStrict(std::unique_ptr<Iterator> sourceSelector, const Children &children)
         : SourceBlenderSearch(std::move(sourceSelector), children)
     {}
+    ~SourceBlenderSearchNonStrict() override;
 };
+
+SourceBlenderSearchNonStrict::~SourceBlenderSearchNonStrict() = default;
 
 class SourceBlenderSearchStrict : public SourceBlenderSearch
 {
 public:
     SourceBlenderSearchStrict(std::unique_ptr<Iterator> sourceSelector, const Children &children);
+    ~SourceBlenderSearchStrict() override;
 private:
     VESPA_DLL_LOCAL void advance() __attribute__((noinline));
     vespalib::Array<SearchIterator *>  _nextChildren;
@@ -38,6 +42,8 @@ SourceBlenderSearchStrict::SourceBlenderSearchStrict(
 {
     _nextChildren.reserve(children.size());
 }
+
+SourceBlenderSearchStrict::~SourceBlenderSearchStrict() = default;
 
 void
 SourceBlenderSearch::doSeek(uint32_t docid)
@@ -179,6 +185,24 @@ SourceBlenderSearch::create(std::unique_ptr<sourceselector::Iterator> sourceSele
         return std::make_unique<SourceBlenderSearchStrict>(std::move(sourceSelector), children);
     } else {
         return std::make_unique<SourceBlenderSearchNonStrict>(std::move(sourceSelector), children);
+    }
+}
+
+void
+SourceBlenderSearch::get_element_ids(uint32_t docid, std::vector<uint32_t>& element_ids)
+{
+    if (seek(docid)) {
+        _matchedChild->get_element_ids(docid, element_ids);
+    }
+}
+
+void
+SourceBlenderSearch::and_element_ids_into(uint32_t docid, std::vector<uint32_t>& element_ids)
+{
+    if (seek(docid)) {
+        _matchedChild->and_element_ids_into(docid, element_ids);
+    } else {
+        element_ids.clear();
     }
 }
 

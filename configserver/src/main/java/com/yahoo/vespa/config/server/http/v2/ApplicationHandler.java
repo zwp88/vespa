@@ -43,12 +43,10 @@ import com.yahoo.vespa.config.server.http.JSONResponse;
 import com.yahoo.vespa.config.server.http.NotFoundException;
 import com.yahoo.vespa.config.server.http.ReindexingStatusException;
 import com.yahoo.vespa.config.server.http.v2.request.ApplicationContentRequest;
-import com.yahoo.vespa.config.server.http.v2.response.ApplicationSuspendedResponse;
 import com.yahoo.vespa.config.server.http.v2.response.DeleteApplicationResponse;
 import com.yahoo.vespa.config.server.http.v2.response.GetApplicationResponse;
 import com.yahoo.vespa.config.server.http.v2.response.QuotaUsageResponse;
 import com.yahoo.vespa.config.server.http.v2.response.ReindexingResponse;
-import com.yahoo.vespa.config.server.tenant.Tenant;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -65,6 +63,7 @@ import java.util.Set;
 import java.util.StringJoiner;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.logging.Level;
 
 import static com.yahoo.vespa.config.server.application.ConfigConvergenceChecker.ServiceListResponse;
 import static com.yahoo.vespa.config.server.application.ConfigConvergenceChecker.ServiceResponse;
@@ -107,7 +106,6 @@ public class ApplicationHandler extends HttpHandler {
         if (path.matches("/application/v2/tenant/{tenant}/application/{application}/environment/{ignore}/region/{ignore}/instance/{instance}/service/{service}/{hostname}/state/v1/{*}")) return serviceStateV1(applicationId(path), path.get("service"), path.get("hostname"), path.getRest(), request);
         if (path.matches("/application/v2/tenant/{tenant}/application/{application}/environment/{ignore}/region/{ignore}/instance/{instance}/serviceconverge")) return listServiceConverge(applicationId(path), request);
         if (path.matches("/application/v2/tenant/{tenant}/application/{application}/environment/{ignore}/region/{ignore}/instance/{instance}/serviceconverge/{hostAndPort}")) return checkServiceConverge(applicationId(path), path.get("hostAndPort"), request);
-        if (path.matches("/application/v2/tenant/{tenant}/application/{application}/environment/{ignore}/region/{ignore}/instance/{instance}/suspended")) return isSuspended(applicationId(path));
         if (path.matches("/application/v2/tenant/{tenant}/application/{application}/environment/{ignore}/region/{ignore}/instance/{instance}/tester/{command}")) return testerRequest(applicationId(path), path.get("command"), request);
         return ErrorResponse.notFoundError("Nothing at " + path);
     }
@@ -228,10 +226,6 @@ public class ApplicationHandler extends HttpHandler {
         return applicationRepository.getDeploymentMetrics(applicationId);
     }
 
-    private HttpResponse isSuspended(ApplicationId applicationId) {
-        return new ApplicationSuspendedResponse(applicationRepository.isSuspended(applicationId));
-    }
-
     private HttpResponse testerRequest(ApplicationId applicationId, String command, HttpRequest request) {
         try {
             return switch (command) {
@@ -289,10 +283,18 @@ public class ApplicationHandler extends HttpHandler {
         if (speedValue == null)
             throw new IllegalArgumentException("request must specify 'speed' parameter");
 
-        return modifyReindexing(applicationId, request,
+        var response = modifyReindexing(applicationId, request,
                                 (original, cluster, type) -> original.withSpeed(cluster, type, Double.parseDouble(speedValue)),
                                 new StringJoiner(", ", "Set reindexing speed to '" + speedValue + "' for document types ", " of application " + applicationId)
                                         .setEmptyValue("Changed reindexing of no document types of application " + applicationId));
+        var deployment = applicationRepository.deployFromLocalActive(applicationId);
+        if (deployment.isPresent()) {
+            log.log(Level.INFO, "Modified reindexing status for " + applicationId, ", deploying to make changes effective");
+            deployment.get().activate();
+        } else {
+            log.log(Level.INFO, "Modified reindexing status for " + applicationId, ", but unable to deploy to make changes effective");
+        }
+        return response;
     }
 
     private interface ReindexingModification {

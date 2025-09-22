@@ -98,7 +98,7 @@ vespa_define_module(
     src/tests/attribute/save_target
     src/tests/attribute/searchable
     src/tests/attribute/searchcontext
-    src/tests/attribute/searchcontextelementiterator
+    src/tests/attribute/search_iterator_element_ids
     src/tests/attribute/sort_blob_writers
     src/tests/attribute/sourceselector
     src/tests/attribute/stringattribute
@@ -134,6 +134,7 @@ vespa_define_module(
     src/tests/expression/attributenode
     src/tests/expression/current_index_setup
     src/tests/expression/filter_predicate_node
+    src/tests/expression/float_bucket_result_node
     src/tests/expression/interpolated_document_field_lookup_node
     src/tests/features
     src/tests/features/beta
@@ -229,6 +230,7 @@ vespa_define_module(
     src/tests/ranksetup
     src/tests/ranksetup/verify_feature
     src/tests/searchcommon/attribute/config
+    src/tests/searchcommon/attribute/initialization_status
     src/tests/searchcommon/schema
     src/tests/sort
     src/tests/sortresults
@@ -256,6 +258,7 @@ vespa_define_module(
     src/tests/util/slime_output_raw_buf_adapter
     src/tests/util/token_extractor
     src/tests/vespa-fileheader-inspect
+    src/tests/query/word_alternatives
 )
 
 install_jar(searchlib.jar)

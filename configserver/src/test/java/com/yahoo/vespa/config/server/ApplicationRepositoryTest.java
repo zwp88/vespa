@@ -31,7 +31,6 @@ import com.yahoo.vespa.config.protocol.ConfigResponse;
 import com.yahoo.vespa.config.protocol.DefContent;
 import com.yahoo.vespa.config.protocol.VespaVersion;
 import com.yahoo.vespa.config.server.application.ApplicationData;
-import com.yahoo.vespa.config.server.application.OrchestratorMock;
 import com.yahoo.vespa.config.server.application.TenantApplications;
 import com.yahoo.vespa.config.server.deploy.TenantFileSystemDirs;
 import com.yahoo.vespa.config.server.filedistribution.FileDirectory;
@@ -58,6 +57,7 @@ import org.junit.rules.TemporaryFolder;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -94,7 +94,6 @@ public class ApplicationRepositoryTest {
 
     private ApplicationRepository applicationRepository;
     private TenantRepository tenantRepository;
-    private OrchestratorMock orchestrator;
     private TimeoutBudget timeoutBudget;
     private Curator curator;
     private ConfigserverConfig configserverConfig;
@@ -130,11 +129,9 @@ public class ApplicationRepositoryTest {
                 .build();
         tenantRepository.addTenant(TenantRepository.HOSTED_VESPA_TENANT);
         tenantRepository.addTenant(tenant1);
-        orchestrator = new OrchestratorMock();
         applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
                 .withConfigserverConfig(configserverConfig)
-                .withOrchestrator(orchestrator)
                 .withLogRetriever(new MockLogRetriever())
                 .withClock(clock)
                 .withFlagSource(flagSource)
@@ -171,7 +168,6 @@ public class ApplicationRepositoryTest {
         applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
                 .withConfigserverConfig(configserverConfig)
-                .withOrchestrator(orchestrator)
                 .withLogRetriever(new MockLogRetriever())
                 .withClock(clock)
                 .withConfigConvergenceChecker(new MockConfigConvergenceChecker(2))
@@ -187,7 +183,6 @@ public class ApplicationRepositoryTest {
     public void prepareAndActivateWithRestartWithoutProvisioner() {
         applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
-                .withOrchestrator(orchestrator)
                 .build();
 
         prepareAndActivate(testAppJdiscOnly);
@@ -248,17 +243,11 @@ public class ApplicationRepositoryTest {
         assertNotEquals(originalApplicationMetaData.getGeneration(), applicationMetaData.getGeneration());
     }
 
-    @Test
-    public void testSuspension() {
-        deployApp(testApp);
-        assertFalse(applicationRepository.isSuspended(applicationId()));
-        orchestrator.suspend(applicationId());
-        assertTrue(applicationRepository.isSuspended(applicationId()));
-    }
 
     @Test
     public void getLogs() throws IOException {
         deployApp(testAppLogServerWithContainer);
+        assertCorrectLogserverUri(applicationId(), 19103);
         HttpResponse response = applicationRepository.getLogs(applicationId(), Optional.empty(), Query.empty());
         assertEquals(200, response.getStatus());
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -267,11 +256,16 @@ public class ApplicationRepositoryTest {
     }
 
     @Test
-    public void getLogsForHostname() {
-        ApplicationId applicationId = ApplicationId.from("hosted-vespa", "tenant-host", "default");
-        deployApp(testAppLogServerWithContainer, new PrepareParams.Builder().applicationId(applicationId).build());
-        HttpResponse response = applicationRepository.getLogs(applicationId, Optional.of(DomainName.localhost), Query.empty());
-        assertEquals(200, response.getStatus());
+    public void getLogsForConfigServer() {
+        assertCorrectLogserverUri(ApplicationId.from("hosted-vespa", "zone-config-servers", "default"), 19071);
+        assertCorrectLogserverUri(ApplicationId.from("hosted-vespa", "controller", "default"), 19071);
+        assertCorrectLogserverUri(ApplicationId.from("hosted-vespa", "tenant-host", "default"), 8080);
+    }
+
+    private void assertCorrectLogserverUri(ApplicationId applicationId, int expectedPort) {
+        var uris = applicationRepository.getLogServerUris(applicationId, Optional.of(DomainName.localhost));
+        assertEquals(1, uris.size());
+        assertEquals(URI.create("http://localhost:" + expectedPort + "/logs"), uris.get(0).asURI());
     }
 
     @Test
@@ -294,7 +288,6 @@ public class ApplicationRepositoryTest {
 
         applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
-                .withOrchestrator(orchestrator)
                 .withClock(clock)
                 .withConfigserverConfig(configserverConfig)
                 .build();
@@ -374,7 +367,6 @@ public class ApplicationRepositoryTest {
         MockMetric actual = new MockMetric();
         applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
-                .withOrchestrator(orchestrator)
                 .withMetric(actual)
                 .withClock(new ManualClock())
                 .build();

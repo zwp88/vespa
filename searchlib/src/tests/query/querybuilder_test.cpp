@@ -367,6 +367,7 @@ struct AbstractTypes {
     using TrueQueryNode = search::query::TrueQueryNode;
     using FalseQueryNode = search::query::FalseQueryNode;
     using FuzzyTerm = search::query::FuzzyTerm;
+    using WordAlternatives = search::query::WordAlternatives;
 };
 
 // Builds a tree with simplequery and checks that the results have the
@@ -383,75 +384,130 @@ TEST(QueryBuilderTest, require_that_Simple_Query_Trees_Can_Be_Built) {
     checkQueryTreeTypes<SimpleQueryNodeTypes>(node.get());
 }
 
-struct MyAnd : And {};
-struct MyAndNot : AndNot {};
+struct MyAnd : And {
+    ~MyAnd() override;
+};
+
+struct MyAndNot : AndNot {
+    ~MyAndNot() override;
+};
+
 struct MyEquiv : Equiv {
     MyEquiv(int32_t i, Weight w) : Equiv(i, w) {}
+    ~MyEquiv() override;
 };
-struct MyNear : Near { explicit MyNear(size_t dist) : Near(dist) {} };
-struct MyONear : ONear { explicit MyONear(size_t dist) : ONear(dist) {} };
-struct MyWeakAnd : WeakAnd { MyWeakAnd(uint32_t minHits, const string & v) : WeakAnd(minHits, v) {} };
-struct MyOr : Or {};
-struct MyPhrase : Phrase { MyPhrase(const string & f, int32_t i, Weight w) : Phrase(f, i, w) {}};
-struct MySameElement : SameElement { MySameElement(const string & f, int32_t i, Weight w) : SameElement(f, i, w) {}};
+
+struct MyNear : Near {
+    explicit MyNear(size_t dist) : Near(dist) {}
+    ~MyNear() override;
+};
+
+struct MyONear : ONear {
+    explicit MyONear(size_t dist) : ONear(dist) {}
+    ~MyONear() override;
+};
+
+struct MyWeakAnd : WeakAnd {
+    MyWeakAnd(uint32_t minHits, const string & v) : WeakAnd(minHits, v) {}
+    ~MyWeakAnd() override;
+};
+
+struct MyOr : Or {
+    ~MyOr() override;
+};
+
+struct MyPhrase : Phrase {
+    MyPhrase(const string & f, int32_t i, Weight w) : Phrase(f, i, w) {}
+    ~MyPhrase() override;
+};
+
+struct MySameElement : SameElement {
+    MySameElement(const string & f, int32_t i, Weight w) : SameElement(f, i, w) {}
+    ~MySameElement() override;
+};
 
 struct MyWeightedSetTerm : WeightedSetTerm {
-    MyWeightedSetTerm(uint32_t n, const string & f, int32_t i, Weight w) : WeightedSetTerm(n, f, i, w) {}
+    using WeightedSetTerm::WeightedSetTerm;
+    ~MyWeightedSetTerm() override;
 };
+
 struct MyDotProduct : DotProduct {
-    MyDotProduct(uint32_t n, const string & f, int32_t i, Weight w) : DotProduct(n, f, i, w) {}
+    using DotProduct::DotProduct;
+    ~MyDotProduct() override;
 };
+
 struct MyWandTerm : WandTerm {
-    MyWandTerm(uint32_t n, const string & f, int32_t i, Weight w, uint32_t targetNumHits,
-               int64_t scoreThreshold, double thresholdBoostFactor)
-        : WandTerm(n, f, i, w, targetNumHits, scoreThreshold, thresholdBoostFactor) {}
+    using WandTerm::WandTerm;
+    ~MyWandTerm() override;
 };
-struct MyRank : Rank {};
+
+struct MyRank : Rank {
+    ~MyRank() override;
+};
+
 struct MyNumberTerm : NumberTerm {
     MyNumberTerm(Type t, const string & f, int32_t i, Weight w)
         : NumberTerm(t, f, i, w) {
     }
+    ~MyNumberTerm() override;
 };
+
 struct MyLocationTerm : LocationTerm {
     MyLocationTerm(const Type &t, const string & f, int32_t i, Weight w)
         : LocationTerm(t, f, i, w) {
     }
+    ~MyLocationTerm() override;
 };
+
 struct MyPrefixTerm : PrefixTerm {
     MyPrefixTerm(const Type &t, const string & f, int32_t i, Weight w)
         : PrefixTerm(t, f, i, w) {
     }
+    ~MyPrefixTerm() override;
 };
+
 struct MyRangeTerm : RangeTerm {
     MyRangeTerm(const Type &t, const string &f, int32_t i, Weight w)
         : RangeTerm(t, f, i, w) {
     }
+    ~MyRangeTerm() override;
 };
+
 struct MyStringTerm : StringTerm {
     MyStringTerm(const Type &t, const string & f, int32_t i, Weight w)
         : StringTerm(t, f, i, w) {
     }
+    ~MyStringTerm() override;
 };
+
 struct MySubstringTerm : SubstringTerm {
     MySubstringTerm(const Type &t, const string & f, int32_t i, Weight w)
         : SubstringTerm(t, f, i, w) {
     }
+    ~MySubstringTerm() override;
 };
+
 struct MySuffixTerm : SuffixTerm {
     MySuffixTerm(const Type &t, const string & f, int32_t i, Weight w)
         : SuffixTerm(t, f, i, w) {
     }
+    ~MySuffixTerm() override;
 };
+
 struct MyPredicateQuery : PredicateQuery {
     MyPredicateQuery(Type &&t, const string & f, int32_t i, Weight w)
         : PredicateQuery(std::move(t), f, i, w) {
     }
+    ~MyPredicateQuery() override;
 };
+
 struct MyRegExpTerm : RegExpTerm {
     MyRegExpTerm(const Type &t, const string & f, int32_t i, Weight w)
         : RegExpTerm(t, f, i, w) {
     }
+    ~MyRegExpTerm() override;
 };
+
 struct MyNearestNeighborTerm : NearestNeighborTerm {
     MyNearestNeighborTerm(std::string_view query_tensor_name, const string & field_name,
                           int32_t i, Weight w, uint32_t target_num_hits,
@@ -459,23 +515,97 @@ struct MyNearestNeighborTerm : NearestNeighborTerm {
                           double distance_threshold)
       : NearestNeighborTerm(query_tensor_name, field_name, i, w, target_num_hits, allow_approximate, explore_additional_hits, distance_threshold)
     {}
+    ~MyNearestNeighborTerm() override;
 };
-struct MyTrue : TrueQueryNode {};
-struct MyFalse : FalseQueryNode {};
+
+struct MyTrue : TrueQueryNode {
+    ~MyTrue() override;
+};
+
+struct MyFalse : FalseQueryNode {
+    ~MyFalse() override;
+};
+
 struct MyFuzzyTerm : FuzzyTerm {
     MyFuzzyTerm(const Type &t, const string &f, int32_t i, Weight w,
                 uint32_t m, uint32_t p, bool prefix_match)
         : FuzzyTerm(t, f, i, w, m, p, prefix_match)
     {
     }
+    ~MyFuzzyTerm() override;
 };
+
 struct MyInTerm : InTerm {
     MyInTerm(std::unique_ptr<TermVector> terms, MultiTerm::Type type,
              const string& f, int32_t i, Weight w)
         : InTerm(std::move(terms), type, f, i, w)
     {
     }
+    ~MyInTerm() override;
 };
+
+struct MyWordAlternatives : WordAlternatives {
+    MyWordAlternatives(std::unique_ptr<TermVector> terms, const string& v, int32_t i, Weight w)
+      : WordAlternatives(std::move(terms), v, i, w)
+    {}
+    ~MyWordAlternatives() override;
+};
+
+MyAnd::~MyAnd() = default;
+
+MyAndNot::~MyAndNot() = default;
+
+MyEquiv::~MyEquiv() = default;
+
+MyNear::~MyNear() = default;
+
+MyONear::~MyONear() = default;
+
+MyWeakAnd::~MyWeakAnd() = default;
+
+MyOr::~MyOr() = default;
+
+MyPhrase::~MyPhrase() = default;
+
+MySameElement::~MySameElement() = default;
+
+MyWeightedSetTerm::~MyWeightedSetTerm() = default;
+
+MyDotProduct::~MyDotProduct() = default;
+
+MyWandTerm::~MyWandTerm() = default;
+
+MyRank::~MyRank() = default;
+
+MyNumberTerm::~MyNumberTerm() = default;
+
+MyLocationTerm::~MyLocationTerm() = default;
+
+MyPrefixTerm::~MyPrefixTerm() = default;
+
+MyRangeTerm::~MyRangeTerm() = default;
+
+MyStringTerm::~MyStringTerm() = default;
+
+MySubstringTerm::~MySubstringTerm() = default;
+
+MySuffixTerm::~MySuffixTerm() = default;
+
+MyPredicateQuery::~MyPredicateQuery() = default;
+
+MyRegExpTerm::~MyRegExpTerm() = default;
+
+MyNearestNeighborTerm::~MyNearestNeighborTerm() = default;
+
+MyTrue::~MyTrue() = default;
+
+MyFalse::~MyFalse() = default;
+
+MyFuzzyTerm::~MyFuzzyTerm() = default;
+
+MyInTerm::~MyInTerm() = default;
+
+MyWordAlternatives::~MyWordAlternatives() = default;
 
 struct MyQueryNodeTypes {
     using And = MyAnd;
@@ -505,6 +635,7 @@ struct MyQueryNodeTypes {
     using FalseQueryNode = MyFalse;
     using FuzzyTerm = MyFuzzyTerm;
     using InTerm = MyInTerm;
+    using WordAlternatives = MyWordAlternatives;
 };
 
 TEST(QueryBuilderTest, require_that_Custom_Query_Trees_Can_Be_Built) {
@@ -741,8 +872,11 @@ TEST(QueryBuilderTest, test_query_parsing_error) {
 class SimpleMultiTerm : public MultiTerm {
 public:
     SimpleMultiTerm(size_t numTerms) : MultiTerm(numTerms) {}
+    ~SimpleMultiTerm() override;
     void accept(QueryVisitor & ) override { }
 };
+
+SimpleMultiTerm::~SimpleMultiTerm() = default;
 
 TEST(QueryBuilderTest, initial_state_of_MultiTerm) {
     SimpleMultiTerm mt(7);
@@ -772,7 +906,7 @@ TEST(QueryBuilderTest, add_and_get_of_integer_MultiTerm) {
     for (int64_t i(0); i < mt.getNumTerms(); i++) {
         mt.addTerm(i-3, Weight(i-4));
     }
-    EXPECT_TRUE(MultiTerm::Type::INTEGER == mt.getType());
+    EXPECT_TRUE(MultiTerm::Type::WEIGHTED_INTEGER == mt.getType());
     verify_multiterm_get(mt);
 }
 
@@ -783,7 +917,7 @@ TEST(QueryBuilderTest, add_and_get_of_string_MultiTerm) {
         auto res = std::to_chars(buf, buf + sizeof(buf), i-3);
         mt.addTerm(std::string_view(buf, res.ptr - buf), Weight(i-4));
     }
-    EXPECT_TRUE(MultiTerm::Type::STRING == mt.getType());
+    EXPECT_TRUE(MultiTerm::Type::WEIGHTED_STRING == mt.getType());
     verify_multiterm_get(mt);
 }
 
@@ -793,20 +927,20 @@ TEST(QueryBuilderTest, first_string_then_integer_MultiTerm) {
     for (int64_t i(1); i < mt.getNumTerms(); i++) {
         mt.addTerm(i-3, Weight(i-4));
     }
-    EXPECT_TRUE(MultiTerm::Type::STRING == mt.getType());
+    EXPECT_TRUE(MultiTerm::Type::WEIGHTED_STRING == mt.getType());
     verify_multiterm_get(mt);
 }
 
 TEST(QueryBuilderTest, first_integer_then_string_MultiTerm) {
     SimpleMultiTerm mt(7);
     mt.addTerm(-3, Weight(-4));
-    EXPECT_TRUE(MultiTerm::Type::INTEGER == mt.getType());
+    EXPECT_TRUE(MultiTerm::Type::WEIGHTED_INTEGER == mt.getType());
     for (int64_t i(1); i < mt.getNumTerms(); i++) {
         char buf[24];
         auto res = std::to_chars(buf, buf + sizeof(buf), i-3);
         mt.addTerm(std::string_view(buf, res.ptr - buf), Weight(i-4));
     }
-    EXPECT_TRUE(MultiTerm::Type::STRING == mt.getType());
+    EXPECT_TRUE(MultiTerm::Type::WEIGHTED_STRING == mt.getType());
     verify_multiterm_get(mt);
 }
 

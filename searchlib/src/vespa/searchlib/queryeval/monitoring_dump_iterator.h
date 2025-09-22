@@ -16,7 +16,7 @@ private:
 
 public:
     MonitoringDumpIterator(MonitoringSearchIterator::UP iterator);
-    ~MonitoringDumpIterator();
+    ~MonitoringDumpIterator() override;
 
     // Overrides SearchIterator
     void doSeek(uint32_t docId) override;
@@ -26,6 +26,8 @@ public:
         _search->initRange(beginid, endid);
         SearchIterator::initRange(_search->getDocId()+1, _search->getEndId());
     }
+    void get_element_ids(uint32_t docid, std::vector<uint32_t>& element_ids) override;
+    void and_element_ids_into(uint32_t docid, std::vector<uint32_t>& element_ids) override;
 };
 
 }

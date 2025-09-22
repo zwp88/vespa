@@ -61,6 +61,7 @@ struct LeafProxy : SimpleLeafBlueprint {
       : SimpleLeafBlueprint(), child(std::move(child_in)) { init(); }
     LeafProxy(FieldSpecBase field, std::unique_ptr<Blueprint> child_in)
       : SimpleLeafBlueprint(field), child(std::move(child_in)) { init(); }
+    ~LeafProxy() override;
     void each_node_post_order(const std::function<void(Blueprint&)> &f) override {
         child->each_node_post_order(f);
         f(*this);
@@ -78,6 +79,8 @@ struct LeafProxy : SimpleLeafBlueprint {
     }
 };
 
+LeafProxy::~LeafProxy() = default;
+
 // check strictness and filter constraints when creating a filter search
 struct CheckParamsProxy : LeafProxy {
     static bool current_strict;           // <- changed by test
@@ -90,6 +93,7 @@ struct CheckParamsProxy : LeafProxy {
         expect_inherit_strict(expect_inherit_strict_in), expect_same_constraint(expect_same_constraint_in) {}
     CheckParamsProxy(std::unique_ptr<Blueprint> child_in)
       : LeafProxy(std::move(child_in)), expect_forced_strict(true), expect_inherit_strict(false), expect_same_constraint(true) {}
+    ~CheckParamsProxy() override;
     SearchIteratorUP createFilterSearchImpl(Constraint constraint) const override {
         if (expect_forced_strict) {
             EXPECT_EQ(strict(), true);
@@ -100,6 +104,9 @@ struct CheckParamsProxy : LeafProxy {
         return child->createFilterSearch(constraint);
     }
 };
+
+CheckParamsProxy::~CheckParamsProxy() = default;
+
 bool CheckParamsProxy::current_strict = false;
 Constraint CheckParamsProxy::current_constraint = lower_bound;
 
@@ -108,14 +115,17 @@ struct CheckDroppedProxy : LeafProxy {
     mutable bool used;
     CheckDroppedProxy(std::unique_ptr<Blueprint> child_in)
       : LeafProxy(std::move(child_in)), used(false) {}
+    ~CheckDroppedProxy() override;
     SearchIteratorUP createFilterSearchImpl(Constraint constraint) const override {
         used = true;
         return child->createFilterSearch(constraint);
     }
-    ~CheckDroppedProxy() override {
-        EXPECT_EQ(used, false);
-    }
 };
+
+CheckDroppedProxy::~CheckDroppedProxy()
+{
+    EXPECT_EQ(used, false);
+}
 
 // need one of these to be able to create a SourceBlender
 struct NullSelector : ISourceSelector {
@@ -380,23 +390,44 @@ struct ParallelWeakAndAdapter {
 // enable Make-ing same element
 struct SameElementAdapter {
     FieldSpec field;
-    SameElementBlueprint blueprint;
+    MatchDataLayout subtree_mdl;
+    mutable std::vector<std::unique_ptr<Blueprint>> children;
+    mutable std::unique_ptr<SameElementBlueprint> blueprint;
     SameElementAdapter();
     ~SameElementAdapter();
     void addChild(std::unique_ptr<Blueprint> child) {
-        auto child_field = blueprint.getNextChildField("foo", 3);
+        assert(!blueprint);
+        FieldSpec child_field("foo", 3, subtree_mdl.allocTermField(3), false);
         auto term = std::make_unique<LeafProxy>(child_field, std::move(child));
-        blueprint.addTerm(std::move(term));
+
+        children.emplace_back(std::move(term));
+    }
+    void make_blueprint() const {
+        if (!blueprint) {
+            blueprint = std::make_unique<SameElementBlueprint>(field, subtree_mdl, false);
+            for (auto& child : children) {
+                blueprint->addChild(std::move(child));
+            }
+        }
     }
     void basic_plan(InFlow in_flow, uint32_t my_docid_limit) {
-        blueprint.basic_plan(in_flow, my_docid_limit);
+        make_blueprint();
+        blueprint->basic_plan(in_flow, my_docid_limit);
     }
     auto createFilterSearch(Constraint constraint) const {
-        return blueprint.createFilterSearch(constraint);
+        make_blueprint();
+        return blueprint->createFilterSearch(constraint);
     }
 };
 
-SameElementAdapter::SameElementAdapter() : field("foo", 5, 11), blueprint(field, false) {}
+SameElementAdapter::SameElementAdapter()
+    : field("foo", 5, 11),
+      subtree_mdl(),
+      children(),
+      blueprint()
+{
+}
+
 SameElementAdapter::~SameElementAdapter() = default;
 
 // Make a specific intermediate-ish blueprint that you can add

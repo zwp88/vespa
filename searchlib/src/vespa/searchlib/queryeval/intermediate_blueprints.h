@@ -17,6 +17,7 @@ class ISourceSelector;
 class AndNotBlueprint : public IntermediateBlueprint
 {
 public:
+    ~AndNotBlueprint() override;
     bool supports_termwise_children() const override { return true; }
     FlowStats calculate_flow_stats(uint32_t docid_limit) const final;
     HitEstimate combine(const std::vector<HitEstimate> &data) const override;
@@ -44,6 +45,7 @@ private:
 class AndBlueprint : public IntermediateBlueprint
 {
 public:
+    ~AndBlueprint() override;
     bool supports_termwise_children() const override { return true; }
     FlowStats calculate_flow_stats(uint32_t docid_limit) const final;
     HitEstimate combine(const std::vector<HitEstimate> &data) const override;
@@ -134,11 +136,11 @@ private:
 
     AnyFlow my_flow(InFlow in_flow) const override;
 public:
+    ~NearBlueprint() override;
     FlowStats calculate_flow_stats(uint32_t docid_limit) const final;
     HitEstimate combine(const std::vector<HitEstimate> &data) const override;
     FieldSpecBaseList exposeFields() const override;
     void sort(Children &children, InFlow in_flow) const override;
-    SearchIteratorUP createSearchImpl(fef::MatchData &md) const override;
     SearchIterator::UP
     createIntermediateSearch(MultiSearch::Children subSearches,
                              fef::MatchData &md) const override;
@@ -160,11 +162,11 @@ private:
 
     AnyFlow my_flow(InFlow in_flow) const override;
 public:
+    ~ONearBlueprint() override;
     FlowStats calculate_flow_stats(uint32_t docid_limit) const final;
     HitEstimate combine(const std::vector<HitEstimate> &data) const override;
     FieldSpecBaseList exposeFields() const override;
     void sort(Children &children, InFlow in_flow) const override;
-    SearchIteratorUP createSearchImpl(fef::MatchData &md) const override;
     SearchIterator::UP
     createIntermediateSearch(MultiSearch::Children subSearches,
                              fef::MatchData &md) const override;
@@ -181,6 +183,7 @@ public:
 class RankBlueprint final : public IntermediateBlueprint
 {
 public:
+    ~RankBlueprint() override;
     FlowStats calculate_flow_stats(uint32_t docid_limit) const final;
     HitEstimate combine(const std::vector<HitEstimate> &data) const override;
     FieldSpecBaseList exposeFields() const override;

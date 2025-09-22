@@ -34,7 +34,7 @@ public:
                         const FeatureStore& feature_store,
                         uint32_t field_id,
                         fef::TermFieldMatchDataArray match_data);
-    ~PostingIteratorBase();
+    ~PostingIteratorBase() override;
 
     void doSeek(uint32_t docId) override;
     void initRange(uint32_t begin, uint32_t end) override;
@@ -108,8 +108,12 @@ public:
     using ParentType::getUnpacked;
     using ParentType::setUnpacked;
 
+    ~PostingIterator() override;
     void doUnpack(uint32_t docId) override;
 };
+
+template <bool interleaved_features, bool unpack_normal_features, bool unpack_interleaved_features>
+PostingIterator<interleaved_features, unpack_normal_features, unpack_interleaved_features>::~PostingIterator() = default;
 
 template <bool interleaved_features, bool unpack_normal_features, bool unpack_interleaved_features>
 void

@@ -46,6 +46,8 @@ std::unique_ptr<SearchIterator> create(Profiler &profiler,
 
 }
 
+ProfiledIterator::~ProfiledIterator() = default;
+
 void
 ProfiledIterator::initRange(uint32_t begin_id, uint32_t end_id)
 {
@@ -89,6 +91,20 @@ ProfiledIterator::and_hits_into(BitVector &result, uint32_t begin_id)
 {
     TaskGuard guard(_profiler, _and_hits_into_tag);
     _search->and_hits_into(result, begin_id);
+}
+
+void
+ProfiledIterator::get_element_ids(uint32_t docid, std::vector<uint32_t>& element_ids)
+{
+    _search->get_element_ids(docid, element_ids);
+    setDocId(_search->getDocId());
+}
+
+void
+ProfiledIterator::and_element_ids_into(uint32_t docid, std::vector<uint32_t>& element_ids)
+{
+    _search->and_element_ids_into(docid, element_ids);
+    setDocId(_search->getDocId());
 }
 
 void

@@ -34,7 +34,6 @@ import com.yahoo.vespa.config.server.application.ApplicationReindexing;
 import com.yahoo.vespa.config.server.application.ClusterReindexing;
 import com.yahoo.vespa.config.server.application.ClusterReindexing.Status;
 import com.yahoo.vespa.config.server.application.HttpProxy;
-import com.yahoo.vespa.config.server.application.OrchestratorMock;
 import com.yahoo.vespa.config.server.deploy.DeployTester;
 import com.yahoo.vespa.config.server.filedistribution.MockFileDistributionFactory;
 import com.yahoo.vespa.config.server.http.HandlerTest;
@@ -90,6 +89,7 @@ import static com.yahoo.vespa.config.server.http.v2.ApplicationHandler.HttpServi
 import static com.yahoo.yolean.Exceptions.uncheck;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -114,8 +114,6 @@ public class ApplicationHandlerTest {
 
     private TenantRepository tenantRepository;
     private ApplicationRepository applicationRepository;
-    private MockProvisioner provisioner;
-    private OrchestratorMock orchestrator;
     private ManualClock clock;
     private List<Endpoint> expectedEndpoints;
     private Availability availability;
@@ -133,7 +131,7 @@ public class ApplicationHandlerTest {
                 .configDefinitionsDir(temporaryFolder.newFolder().getAbsolutePath())
                 .fileReferencesDir(temporaryFolder.newFolder().getAbsolutePath())
                 .build();
-        provisioner = new MockProvisioner();
+        MockProvisioner provisioner = new MockProvisioner();
         tenantRepository = new TestTenantRepository.Builder()
                 .withClock(clock)
                 .withConfigserverConfig(configserverConfig)
@@ -142,11 +140,9 @@ public class ApplicationHandlerTest {
                 .withModelFactoryRegistry(new ModelFactoryRegistry(modelFactories))
                 .build();
         tenantRepository.addTenant(mytenantName);
-        orchestrator = new OrchestratorMock();
         activeTokenFingerprints = new HashMap<>();
         applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
-                .withOrchestrator(orchestrator)
                 .withClock(clock)
                 .withTesterClient(testerClient)
                 .withLogRetriever(logRetriever)
@@ -313,9 +309,12 @@ public class ApplicationHandlerTest {
                      database.readReindexingStatus(applicationId).orElseThrow());
 
         clock.advance(Duration.ofSeconds(1));
+        var activeSession = applicationRepository.getActiveSession(applicationId);
         reindex(applicationId, PUT, "?documentType=bar&speed=0", "{\"message\":\"Set reindexing speed to '0' for document types [bar] in 'boo', [bar] in 'foo' of application default.default\"}");
         expected = expected.withSpeed("boo", "bar", 0)
                            .withSpeed("foo", "bar", 0);
+        // Assert that a new session is activated at when reindexing speed is set to 0 (or any other changes to reindexing)
+        assertNotEquals(activeSession, applicationRepository.getActiveSession(applicationId));
 
         reindexing(applicationId, DELETE, "{\"message\":\"Reindexing disabled\"}");
         expected = expected.enabled(false);
@@ -380,13 +379,6 @@ public class ApplicationHandlerTest {
         restart(applicationId, Zone.defaultZone());
     }
 
-    @Test
-    public void testSuspended() throws Exception {
-        applicationRepository.deploy(testApp, prepareParams(applicationId));
-        assertSuspended(false, applicationId, Zone.defaultZone());
-        orchestrator.suspend(applicationId);
-        assertSuspended(true, applicationId, Zone.defaultZone());
-    }
 
     @Test
     public void testConverge() throws Exception {
@@ -401,7 +393,6 @@ public class ApplicationHandlerTest {
         HttpProxy mockHttpProxy = mock(HttpProxy.class);
         ApplicationRepository applicationRepository = new ApplicationRepository.Builder()
                 .withTenantRepository(tenantRepository)
-                .withOrchestrator(orchestrator)
                 .withTesterClient(testerClient)
                 .withHttpProxy(mockHttpProxy)
                 .build();
@@ -923,7 +914,7 @@ public class ApplicationHandlerTest {
     }
 
     private PrepareParams prepareParams(ApplicationId applicationId) {
-        return new PrepareParams.Builder().applicationId(applicationId).build();
+        return new PrepareParams.Builder().applicationId(applicationId).vespaVersion(vespaVersion).build();
     }
 
     private static void assertResponse(String expectedJson, int status, HttpResponse response) {

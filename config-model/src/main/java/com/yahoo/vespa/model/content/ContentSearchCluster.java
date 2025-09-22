@@ -5,6 +5,7 @@ import com.yahoo.config.model.api.ModelContext;
 import com.yahoo.config.model.deploy.DeployState;
 import com.yahoo.config.model.producer.AnyConfigProducer;
 import com.yahoo.config.model.producer.TreeConfigProducer;
+import com.yahoo.config.provision.ClusterSpec;
 import com.yahoo.documentmodel.NewDocumentType;
 import com.yahoo.schema.Schema;
 import com.yahoo.schema.derived.SchemaInfo;
@@ -27,6 +28,7 @@ import org.w3c.dom.Element;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.Objects;
@@ -65,25 +67,18 @@ public class ContentSearchCluster extends TreeConfigProducer<AnyConfigProducer> 
     private final double defaultFeedConcurrency;
     private final double defaultFeedNiceness;
     private final boolean forwardIssuesToQrs;
-    private final long transactionLogReplaySoftMemoryLimit;
     private final int searchCoreMaxOutstandingMoveOps;
     private final int searchNodeInitializerThreads;
-
-    /** Whether the nodes of this cluster also hosts a container cluster in a hosted system */
-    private final double fractionOfMemoryReserved;
 
     public static class Builder extends VespaDomBuilder.DomConfigProducerBuilderBase<ContentSearchCluster> {
 
         private final Map<String, NewDocumentType> documentDefinitions;
         private final Set<NewDocumentType> globallyDistributedDocuments;
-        private final double fractionOfMemoryReserved;
 
         public Builder(Map<String, NewDocumentType> documentDefinitions,
-                       Set<NewDocumentType> globallyDistributedDocuments,
-                       double fractionOfMemoryReserved) {
+                       Set<NewDocumentType> globallyDistributedDocuments) {
             this.documentDefinitions = documentDefinitions;
             this.globallyDistributedDocuments = globallyDistributedDocuments;
-            this.fractionOfMemoryReserved = fractionOfMemoryReserved;
         }
 
         @Override
@@ -96,7 +91,7 @@ public class ContentSearchCluster extends TreeConfigProducer<AnyConfigProducer> 
             var search = new ContentSearchCluster(ancestor, clusterName, deployState.getProperties().featureFlags(),
                                                   documentDefinitions, globallyDistributedDocuments,
                                                   getFlushOnShutdown(flushOnShutdownElem, deployState),
-                                                  syncTransactionLog, fractionOfMemoryReserved,
+                                                  syncTransactionLog,
                                                   deployState.getProperties().searchNodeInitializerThreads(clusterName));
 
             ModelElement tuning = clusterElem.childByPath("engine.proton.tuning");
@@ -139,7 +134,6 @@ public class ContentSearchCluster extends TreeConfigProducer<AnyConfigProducer> 
                                  Set<NewDocumentType> globallyDistributedDocuments,
                                  boolean flushOnShutdown,
                                  Boolean syncTransactionLog,
-                                 double fractionOfMemoryReserved,
                                  int searchNodeInitializeThreads)
     {
         super(parent, "search");
@@ -150,11 +144,9 @@ public class ContentSearchCluster extends TreeConfigProducer<AnyConfigProducer> 
         this.flushOnShutdown = flushOnShutdown;
         this.syncTransactionLog = syncTransactionLog;
 
-        this.fractionOfMemoryReserved = fractionOfMemoryReserved;
         this.defaultFeedConcurrency = featureFlags.feedConcurrency();
         this.defaultFeedNiceness = featureFlags.feedNiceness();
         this.forwardIssuesToQrs = featureFlags.forwardIssuesAsErrors();
-        this.transactionLogReplaySoftMemoryLimit = featureFlags.searchCoreTransactionLogReplaySoftMemoryLimit();
         this.searchCoreMaxOutstandingMoveOps = featureFlags.searchCoreMaxOutstandingMoveOps();
         this.searchNodeInitializerThreads = searchNodeInitializeThreads;
     }
@@ -232,12 +224,13 @@ public class ContentSearchCluster extends TreeConfigProducer<AnyConfigProducer> 
         if (element == null) {
             searchNode = SearchNode.create(parent, "" + node.getDistributionKey(), node.getDistributionKey(), spec,
                                            clusterName, node, flushOnShutdown, tuning, deployState.isHosted(),
-                                           fractionOfMemoryReserved, syncTransactionLog);
+                                           syncTransactionLog,
+                                           deployState.getProperties().mallocImpl(Optional.of(ClusterSpec.Type.content)));
             searchNode.setHostResource(node.getHostResource());
             searchNode.initService(deployState);
         } else {
             searchNode = new SearchNode.Builder("" + node.getDistributionKey(), spec, clusterName, node, flushOnShutdown,
-                                                tuning, fractionOfMemoryReserved, syncTransactionLog)
+                                                tuning, syncTransactionLog)
                     .build(deployState, parent, element.getXml());
         }
         if (searchCluster != null) {
@@ -340,7 +333,6 @@ public class ContentSearchCluster extends TreeConfigProducer<AnyConfigProducer> 
         builder.flush.memory.each.diskbloatfactor(DEFAULT_DISK_BLOAT);
         builder.summary.log.chunk.compression.level(DEFAULT_DOC_STORE_COMPRESSION_LEVEL);
         builder.summary.log.compact.compression.level(DEFAULT_DOC_STORE_COMPRESSION_LEVEL);
-        builder.replay_throttling_policy.memory_usage_soft_limit_bytes(transactionLogReplaySoftMemoryLimit);
         builder.maintenancejobs.maxoutstandingmoveops(searchCoreMaxOutstandingMoveOps);
         builder.forward_issues(forwardIssuesToQrs);
 

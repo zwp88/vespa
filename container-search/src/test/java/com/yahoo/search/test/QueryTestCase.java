@@ -12,8 +12,11 @@ import com.yahoo.language.opennlp.OpenNlpLinguistics;
 import com.yahoo.language.process.LinguisticsParameters;
 import com.yahoo.language.process.StemMode;
 import com.yahoo.language.process.Token;
+import com.yahoo.language.process.Tokenizer;
 import com.yahoo.language.simple.SimpleDetector;
 import com.yahoo.language.simple.SimpleLinguistics;
+import com.yahoo.language.simple.SimpleToken;
+import com.yahoo.language.simple.SimpleTokenizer;
 import com.yahoo.prelude.Index;
 import com.yahoo.prelude.IndexFacts;
 import com.yahoo.prelude.IndexModel;
@@ -29,6 +32,7 @@ import com.yahoo.prelude.query.OrItem;
 import com.yahoo.prelude.query.PhraseSegmentItem;
 import com.yahoo.prelude.query.RankItem;
 import com.yahoo.prelude.query.WeakAndItem;
+import com.yahoo.prelude.query.WordAlternativesItem;
 import com.yahoo.prelude.query.WordItem;
 import com.yahoo.prelude.querytransform.CJKSearcher;
 import com.yahoo.processing.request.CompoundName;
@@ -38,6 +42,7 @@ import com.yahoo.search.Searcher;
 import com.yahoo.search.grouping.GroupingQueryParser;
 import com.yahoo.search.query.QueryTree;
 import com.yahoo.search.query.QueryType;
+import com.yahoo.search.query.Ranking;
 import com.yahoo.search.query.SessionId;
 import com.yahoo.search.query.parser.ParserEnvironment.ParserSettings;
 import com.yahoo.search.query.profile.DimensionValues;
@@ -56,6 +61,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -1279,6 +1285,117 @@ public class QueryTestCase {
     }
 
     @Test
+    void testLinguisticsModeWithSingleTerm() {
+        var profile = new QueryProfile("test");
+        profile.set("model.type", "linguistics", null);
+        profile.set("model.type.isYqlDefault", "true", null);
+        var query = new Query(httpEncode("?yql=select * from sources * where default contains 'Cars'"),
+                              profile.compile(null));
+        Result r = new Execution(new Chain<>(new MinimalQueryInserter()), Execution.Context.createContextStub()).search(query);
+        assertEquals("select * from sources * where default contains ({stem: false, normalizeCase: false, accentDrop: false}\"car\")",
+                     query.yqlRepresentation());
+
+        var word = (WordItem)query.getModel().getQueryTree().getRoot();
+        // Further token processing is disabled due to type=linguistics applied by default to all terms
+        assertTrue(word.isStemmed());
+        assertFalse(word.isNormalizable());
+        assertTrue(word.isLowercased());
+    }
+
+    @Test
+    void testLinguisticsModeWithMultipleTokens() {
+        var mockLinguistics = new MockTokenizerLinguistics();
+
+        var profile = new QueryProfile("test");
+        profile.set("model.type", "linguistics", null); // disables further processing
+        profile.set("model.type.isYqlDefault", "true", null);
+
+        {
+            String parsedYql = parse("select * from sources * where default contains 'color'",
+                                     mockLinguistics,
+                                     profile);
+            assertEquals("select * from sources * where default contains ({origin: {original: \"color\", offset: 0, length: 5}, id: 1, normalizeCase: false, accentDrop: false}alternatives({\"color\": 1.0, \"colour\": 1.0}))",
+                         parsedYql);
+            assertEquals(parsedYql, parse(parsedYql, mockLinguistics, profile),
+                         "Re-parsing yield the same output");
+        }
+
+        {
+            String parsedYql = parse("select * from sources * where default contains near('color', 'red')",
+                                     mockLinguistics,
+                                     profile);
+            assertEquals("select * from sources * where default contains near(({origin: {original: \"color\", offset: 0, length: 5}, id: 1, normalizeCase: false, accentDrop: false}alternatives({\"color\": 1.0, \"colour\": 1.0})), ({stem: false, normalizeCase: false, accentDrop: false, id: 2}\"red\"))",
+                         parsedYql);
+            assertEquals(parsedYql, parse(parsedYql, mockLinguistics, profile),
+                         "Re-parsing yield the same output");
+        }
+
+        {
+            String parsedYql = parse("select * from sources * where default contains 'color-red'",
+                                     mockLinguistics,
+                                     profile);
+            assertEquals("select * from sources * where default contains " +
+                         "({origin: {original: \"color-red\", offset: 0, length: 9}, id: 1, stem: false}" +
+                         "phrase(default contains ({origin: {original: \"color-red\", offset: 0, length: 9}, " +
+                         "normalizeCase: false, accentDrop: false}alternatives({\"color\": 1.0, \"colour\": 1.0})), \"red\"))",
+                         parsedYql);
+            //assertEquals(parsedYql, parse(parsedYql, mockLinguistics, profile), TODO: YQL parse alternatives inside phrases
+            //             "Re-parsing yield the same output");
+        }
+
+        {
+            String parsedYql = parse("select * from sources * where default contains near('my', 'color-red')",
+                                     mockLinguistics,
+                                     profile);
+            assertEquals("select * from sources * where default contains " +
+                         "near(({stem: false, normalizeCase: false, accentDrop: false, id: 1}\"my\"), " +
+                         "({origin: {original: \"color-red\", offset: 0, length: 9}, id: 2, stem: false}" +
+                         "phrase(default contains ({origin: {original: \"color-red\", offset: 0, length: 9}, " +
+                         "normalizeCase: false, accentDrop: false}alternatives({\"color\": 1.0, \"colour\": 1.0})), \"red\")))",
+                         parsedYql);
+            //assertEquals(parsedYql, parse(parsedYql, mockLinguistics, profile), TODO: YQL parse alternatives inside phrases
+            //             "Re-parsing yield the same output");
+        }
+    }
+
+    @Test
+    void testLinguisticsModeWithMultipleTokensAsUserInput() {
+        var mockLinguistics = new MockTokenizerLinguistics();
+
+        var profile = new QueryProfile("test");
+        profile.set("model.type", "linguistics", null); // disables further processing
+        profile.set("model.type.isYqlDefault", "true", null);
+        {
+            String parsedYql = parse("select * from sources * where userInput('color')",
+                                     mockLinguistics,
+                                     profile);
+            assertEquals("select * from sources * where weakAnd(default contains ({origin: {original: \"color\", offset: 0, length: 5}, id: 1, normalizeCase: false, accentDrop: false}alternatives({\"color\": 1.0, \"colour\": 1.0})))",
+                         parsedYql);
+            assertEquals(parsedYql, parse(parsedYql, mockLinguistics, profile),
+                         "Re-parsing yield the same output");
+        }
+
+        {
+            String parsedYql = parse("select * from sources * where ({grammar.composite:'near'}userInput('color red'))",
+                                     mockLinguistics,
+                                     profile);
+            assertEquals("select * from sources * where default contains near(({origin: {original: \"color\", offset: 0, length: 5}, id: 1, normalizeCase: false, accentDrop: false}alternatives({\"color\": 1.0, \"colour\": 1.0})), ({stem: false, normalizeCase: false, accentDrop: false, implicitTransforms: false, id: 2}\"red\"))",
+                         parsedYql);
+            assertEquals(parsedYql, parse(parsedYql, mockLinguistics, profile),
+                         "Re-parsing yield the same output");
+        }
+    }
+
+    private String parse(String yql, Linguistics linguistics, QueryProfile profile) {
+        var query = new Query(httpEncode("?yql=" + yql), profile.compile(null));
+        var result = new Execution(new Chain<>(new MinimalQueryInserter()), Execution.Context.createContextStub(null, linguistics)).search(query);
+        assertNull(result.hits().getError(), result.hits().getError() == null ? "" : result.hits().getError().toString());
+        query.getModel().prepare(query.getRanking()); // Test serialization/deserialization of these additional annotations
+
+        return query.yqlRepresentation();
+    }
+
+    @Test
     void testLinguisticsModeWithPhraseSegment() {
         var profile = new QueryProfile("test");
         profile.set("model.type", "linguistics", null);
@@ -1402,7 +1519,7 @@ public class QueryTestCase {
             sd.addIndex(tokenIndex);
         }
         IndexFacts indexFacts = new IndexFacts(new IndexModel(sd));
-        MockLinguistics mockLinguistics = new MockLinguistics();
+        var mockLinguistics = new MockDetectorLinguistics();
         q.getModel().setExecution(new Execution(Execution.Context.createContextStub(indexFacts, mockLinguistics)));
         q.getModel().getQueryTree(); // cause parsing
         assertEquals(expectedDetectionText, mockLinguistics.detector.lastDetectionText);
@@ -1420,8 +1537,41 @@ public class QueryTestCase {
         }
     }
 
+    private static class MockTokenizerLinguistics extends SimpleLinguistics {
+
+        @Override
+        public Tokenizer getTokenizer() { return new MockTokenizer(); }
+
+        @Override
+        public boolean equals(Linguistics other) { return (other instanceof MockTokenizerLinguistics); }
+
+    }
+
+    private static class MockTokenizer extends SimpleTokenizer {
+
+        @Override
+        public Iterable<Token> tokenize(String input, LinguisticsParameters parameters) {
+            List<Token> tokens = new ArrayList<>();
+            for (String token : input.split(" ")) {
+                if (token.isBlank()) continue;
+                if (token.equals("color")) {
+                    tokens.add(SimpleToken.fromStems("color", List.of("color", "colour")));
+                }
+                else if (token.equals("color-red")) {
+                    tokens.add(SimpleToken.fromStems("color", List.of("color", "colour")));
+                    tokens.add(SimpleToken.fromStems("red", List.of("red")));
+                }
+                else {
+                    tokens.add(SimpleToken.fromStems(token, List.of(token)));
+                }
+            }
+            return tokens;
+        }
+
+    }
+
     /** A linguistics instance which records the last language detection text passed to it */
-    private static class MockLinguistics extends SimpleLinguistics {
+    private static class MockDetectorLinguistics extends SimpleLinguistics {
 
         final MockDetector detector = new MockDetector();
 
@@ -1429,7 +1579,7 @@ public class QueryTestCase {
         public Detector getDetector() { return detector; }
 
         @Override
-        public boolean equals(Linguistics other) { return (other instanceof MockLinguistics); }
+        public boolean equals(Linguistics other) { return (other instanceof MockDetectorLinguistics); }
     }
 
     private static class MockDetector extends SimpleDetector {

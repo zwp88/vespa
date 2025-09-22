@@ -69,23 +69,11 @@ void optimize_source_blenders(IntermediateBlueprint &self, size_t begin_idx) {
     }
 }
 
-void
-need_normal_features_for_children(const IntermediateBlueprint &blueprint, fef::MatchData &md)
-{
-    for (size_t i = 0; i < blueprint.childCnt(); ++i) {
-        const Blueprint::State &cs = blueprint.getChild(i).getState();
-        for (size_t j = 0; j < cs.numFields(); ++j) {
-            auto *tfmd = cs.field(j).resolve(md);
-            if (tfmd != nullptr) {
-                tfmd->setNeedNormalFeatures(true);
-            }
-        }
-    }
-}
-
 } // namespace search::queryeval::<unnamed>
 
 //-----------------------------------------------------------------------------
+
+AndNotBlueprint::~AndNotBlueprint() = default;
 
 FlowStats
 AndNotBlueprint::calculate_flow_stats(uint32_t) const
@@ -215,6 +203,8 @@ AndNotBlueprint::my_flow(InFlow in_flow) const
 }
 
 //-----------------------------------------------------------------------------
+
+AndBlueprint::~AndBlueprint() = default;
 
 FlowStats
 AndBlueprint::calculate_flow_stats(uint32_t) const {
@@ -564,6 +554,8 @@ WeakAndBlueprint::set_matching_phase(MatchingPhase matching_phase) noexcept
 
 //-----------------------------------------------------------------------------
 
+NearBlueprint::~NearBlueprint() = default;
+
 AnyFlow
 NearBlueprint::my_flow(InFlow in_flow) const
 {
@@ -601,13 +593,6 @@ NearBlueprint::sort(Children &children, InFlow in_flow) const
 }
 
 SearchIterator::UP
-NearBlueprint::createSearchImpl(fef::MatchData &md) const
-{
-    need_normal_features_for_children(*this, md);
-    return IntermediateBlueprint::createSearchImpl(md);
-}
-
-SearchIterator::UP
 NearBlueprint::createIntermediateSearch(MultiSearch::Children sub_searches,
                                         search::fef::MatchData &md) const
 {
@@ -628,6 +613,8 @@ NearBlueprint::createFilterSearchImpl(FilterConstraint constraint) const
 }
 
 //-----------------------------------------------------------------------------
+
+ONearBlueprint::~ONearBlueprint() = default;
 
 AnyFlow
 ONearBlueprint::my_flow(InFlow in_flow) const
@@ -662,13 +649,6 @@ ONearBlueprint::sort(Children &, InFlow) const
 }
 
 SearchIterator::UP
-ONearBlueprint::createSearchImpl(fef::MatchData &md) const
-{
-    need_normal_features_for_children(*this, md);
-    return IntermediateBlueprint::createSearchImpl(md);
-}
-
-SearchIterator::UP
 ONearBlueprint::createIntermediateSearch(MultiSearch::Children sub_searches,
                                          search::fef::MatchData &md) const
 {
@@ -691,6 +671,8 @@ ONearBlueprint::createFilterSearchImpl(FilterConstraint constraint) const
 }
 
 //-----------------------------------------------------------------------------
+
+RankBlueprint::~RankBlueprint() = default;
 
 FlowStats
 RankBlueprint::calculate_flow_stats(uint32_t) const {

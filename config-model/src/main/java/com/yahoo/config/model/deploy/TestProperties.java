@@ -58,7 +58,7 @@ public class TestProperties implements ModelContext.Properties, ModelContext.Fea
     private double resourceLimitDisk = 0.75;
     private double resourceLimitMemory = 0.8;
     private double resourceLimitLowWatermarkDifference = 0.01;
-    private double resourceLimitAddressSpace = 0.89;
+    private double resourceLimitAddressSpace = 0.80;
     private int maxUnCommittedMemory = 123456;
     private boolean useV8GeoPositions = true;
     private List<String> environmentVariables = List.of();
@@ -77,8 +77,8 @@ public class TestProperties implements ModelContext.Properties, ModelContext.Fea
     private boolean logserverOtelCol = false;
     private int maxContentNodeMaintenanceOpConcurrency = -1;
     private int maxDistributorDocumentOperationSizeMib = -1;
-    private long searchCoreTransactionLogReplaySoftMemoryLimit = -3;
     private int searchCoreMaxOutstandingMoveOps = 100;
+    private Map<ClusterSpec.Type, String> mallocImpl = new HashMap<>();
     private boolean useNewPrepareForRestart = false;
     private Map<String, Integer> searchNodeInitializerThreads = new HashMap<>();
 
@@ -132,11 +132,13 @@ public class TestProperties implements ModelContext.Properties, ModelContext.Fea
     @Override public boolean logserverOtelCol() { return logserverOtelCol; }
     @Override public int maxContentNodeMaintenanceOpConcurrency() { return maxContentNodeMaintenanceOpConcurrency; }
     @Override public int maxDistributorDocumentOperationSizeMib() { return maxDistributorDocumentOperationSizeMib; }
-    @Override public long searchCoreTransactionLogReplaySoftMemoryLimit() { return searchCoreTransactionLogReplaySoftMemoryLimit; }
     @Override public int searchCoreMaxOutstandingMoveOps() { return searchCoreMaxOutstandingMoveOps; }
     @Override public boolean useNewPrepareForRestart() { return useNewPrepareForRestart; }
     @Override public int searchNodeInitializerThreads() { return 0; }
     @Override public int searchNodeInitializerThreads(String clusterId) { return searchNodeInitializerThreads.getOrDefault(clusterId, 0); }
+    @Override public String mallocImpl(Optional<ClusterSpec.Type> clusterType) {
+        return clusterType.map(c -> mallocImpl.get(c)).orElse(null);
+    }
 
     public TestProperties maxUnCommittedMemory(int maxUnCommittedMemory) {
         this.maxUnCommittedMemory = maxUnCommittedMemory;
@@ -342,13 +344,13 @@ public class TestProperties implements ModelContext.Properties, ModelContext.Fea
         return this;
     }
 
-    public TestProperties setSearchCoreTransactionLogReplaySoftMemoryLimit(long limit) {
-        this.searchCoreTransactionLogReplaySoftMemoryLimit = limit;
+    public TestProperties setSearchCoreMaxOutstandingMoveOps(int value) {
+        this.searchCoreMaxOutstandingMoveOps = value;
         return this;
     }
 
-    public TestProperties setSearchCoreMaxOutstandingMoveOps(int value) {
-        this.searchCoreMaxOutstandingMoveOps = value;
+    public TestProperties setMallocImpl(ClusterSpec.Type clusterType, String mallocImpl) {
+        this.mallocImpl.put(clusterType, mallocImpl);
         return this;
     }
 
